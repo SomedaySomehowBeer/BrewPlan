@@ -191,6 +191,15 @@ export const fermentationLogSchema = z.object({
   loggedBy: z.string().max(200).nullable().optional(),
 });
 
+export const batchMeasurementLogSchema = z.object({
+  og: z.coerce.number().positive().nullable().optional(),
+  fg: z.coerce.number().positive().nullable().optional(),
+  volumeLitres: z.coerce.number().positive().nullable().optional(),
+  ibu: z.coerce.number().nonnegative().nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+  loggedBy: z.string().max(200).nullable().optional(),
+});
+
 // ── Vessels ───────────────────────────────────────────
 
 export const createVesselSchema = z.object({
