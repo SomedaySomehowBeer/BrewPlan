@@ -1,0 +1,21 @@
+{
+  "name": "brewplan",
+  "private": true,
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "db:generate": "pnpm --filter @brewplan/db db:generate",
+    "db:migrate": "pnpm --filter @brewplan/db db:migrate",
+    "db:seed": "pnpm --filter @brewplan/db db:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
