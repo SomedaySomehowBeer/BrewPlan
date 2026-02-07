@@ -379,6 +379,24 @@ export function addFermentationEntry(
     })
     .run();
 
+  // Sync gravity readings to batch: first reading → OG, latest → FG
+  if (data.gravity != null) {
+    const batch = get(batchId);
+    if (batch) {
+      const updates: Record<string, unknown> = {
+        actualFg: data.gravity,
+        updatedAt: now,
+      };
+      if (batch.actualOg == null) {
+        updates.actualOg = data.gravity;
+      }
+      db.update(brewBatches)
+        .set(updates)
+        .where(eq(brewBatches.id, batchId))
+        .run();
+    }
+  }
+
   return db
     .select()
     .from(fermentationLogEntries)
