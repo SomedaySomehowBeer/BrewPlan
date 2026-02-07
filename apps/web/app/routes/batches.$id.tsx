@@ -109,41 +109,64 @@ export default function BatchDetailLayout() {
             )}
           </div>
 
-          {/* Transition Buttons - LARGE for brewery floor use */}
-          {allowedTransitions.length > 0 && (
+          {/* Transition Buttons - LARGE for brewery floor use (excludes dump) */}
+          {allowedTransitions.filter((s) => s !== "dumped").length > 0 && (
             <div className="flex flex-wrap gap-3 pt-2">
-              {allowedTransitions.map((toStatus) => {
-                const meta = transitionMeta[toStatus] ?? {
-                  label: toStatus,
-                  icon: Play,
-                  variant: "default" as const,
-                };
-                const Icon = meta.icon;
-                return (
-                  <Form
-                    key={toStatus}
-                    method="post"
-                    action={`/batches/${batch.id}/transition`}
-                  >
-                    <input type="hidden" name="toStatus" value={toStatus} />
-                    <Button
-                      type="submit"
-                      variant={meta.variant}
-                      size="lg"
-                      className="min-h-[56px] text-base px-6"
+              {allowedTransitions
+                .filter((s) => s !== "dumped")
+                .map((toStatus) => {
+                  const meta = transitionMeta[toStatus] ?? {
+                    label: toStatus,
+                    icon: Play,
+                    variant: "default" as const,
+                  };
+                  const Icon = meta.icon;
+                  return (
+                    <Form
+                      key={toStatus}
+                      method="post"
+                      action={`/batches/${batch.id}/transition`}
                     >
-                      <Icon className="mr-2 h-5 w-5" />
-                      {meta.label}
-                    </Button>
-                  </Form>
-                );
-              })}
+                      <input type="hidden" name="toStatus" value={toStatus} />
+                      <Button
+                        type="submit"
+                        variant={meta.variant}
+                        size="lg"
+                        className="min-h-[56px] text-base px-6"
+                      >
+                        <Icon className="mr-2 h-5 w-5" />
+                        {meta.label}
+                      </Button>
+                    </Form>
+                  );
+                })}
             </div>
           )}
         </CardContent>
       </Card>
 
       <Outlet />
+
+      {/* Dump batch — intentionally at the very bottom */}
+      {allowedTransitions.includes("dumped" as BatchStatus) && (
+        <div className="pt-8 border-t mt-8">
+          <Form
+            method="post"
+            action={`/batches/${batch.id}/transition`}
+          >
+            <input type="hidden" name="toStatus" value="dumped" />
+            <Button
+              type="submit"
+              variant="destructive"
+              size="lg"
+              className="min-h-[56px] text-base px-6"
+            >
+              <Trash2 className="mr-2 h-5 w-5" />
+              Dump Batch
+            </Button>
+          </Form>
+        </div>
+      )}
     </div>
   );
 }

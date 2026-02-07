@@ -15,6 +15,13 @@
       "when": 1770476848199,
       "tag": "0001_familiar_jamie_braddock",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1770507531284,
+      "tag": "0002_fair_thunderbolt_ross",
+      "breakpoints": true
     }
   ]
 }

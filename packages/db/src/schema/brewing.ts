@@ -80,17 +80,3 @@ export const fermentationLogEntries = sqliteTable("fermentation_log_entries", {
   notes: text("notes"),
   loggedBy: text("logged_by"),
 });
-
-export const batchMeasurementLog = sqliteTable("batch_measurement_log", {
-  id: text("id").primaryKey(),
-  brewBatchId: text("brew_batch_id")
-    .notNull()
-    .references(() => brewBatches.id),
-  loggedAt: text("logged_at").notNull(),
-  og: real("og"),
-  fg: real("fg"),
-  volumeLitres: real("volume_litres"),
-  ibu: real("ibu"),
-  notes: text("notes"),
-  loggedBy: text("logged_by"),
-});

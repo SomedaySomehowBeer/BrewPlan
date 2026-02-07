@@ -5,7 +5,6 @@ import {
   brewBatches,
   brewIngredientConsumptions,
   fermentationLogEntries,
-  batchMeasurementLog,
   recipes,
   inventoryLots,
   inventoryItems,
@@ -106,13 +105,6 @@ export function getWithDetails(id: string) {
     .orderBy(fermentationLogEntries.loggedAt)
     .all();
 
-  const measurementLog = db
-    .select()
-    .from(batchMeasurementLog)
-    .where(eq(batchMeasurementLog.brewBatchId, id))
-    .orderBy(batchMeasurementLog.loggedAt)
-    .all();
-
   let vessel = null;
   if (batch.vesselId) {
     vessel =
@@ -128,7 +120,6 @@ export function getWithDetails(id: string) {
     recipe: recipe ?? null,
     consumptions,
     fermentationLog,
-    measurementLog,
     vessel,
   };
 }
@@ -404,60 +395,3 @@ export function getFermentationLog(batchId: string) {
     .all();
 }
 
-// ── Measurement log ─────────────────────────────────
-
-export function addMeasurementEntry(
-  batchId: string,
-  data: {
-    og?: number | null;
-    fg?: number | null;
-    volumeLitres?: number | null;
-    ibu?: number | null;
-    notes?: string | null;
-    loggedBy?: string | null;
-  }
-) {
-  const now = new Date().toISOString();
-  const id = uuid();
-
-  db.insert(batchMeasurementLog)
-    .values({
-      id,
-      brewBatchId: batchId,
-      loggedAt: now,
-      og: data.og ?? null,
-      fg: data.fg ?? null,
-      volumeLitres: data.volumeLitres ?? null,
-      ibu: data.ibu ?? null,
-      notes: data.notes ?? null,
-      loggedBy: data.loggedBy ?? null,
-    })
-    .run();
-
-  // Sync non-null values back to brew_batches for ABV calculation
-  const syncUpdates: Record<string, unknown> = { updatedAt: now };
-  if (data.og != null) syncUpdates.actualOg = data.og;
-  if (data.fg != null) syncUpdates.actualFg = data.fg;
-  if (data.volumeLitres != null) syncUpdates.actualVolumeLitres = data.volumeLitres;
-  if (data.ibu != null) syncUpdates.actualIbu = data.ibu;
-
-  db.update(brewBatches)
-    .set(syncUpdates)
-    .where(eq(brewBatches.id, batchId))
-    .run();
-
-  return db
-    .select()
-    .from(batchMeasurementLog)
-    .where(eq(batchMeasurementLog.id, id))
-    .get()!;
-}
-
-export function getMeasurementLog(batchId: string) {
-  return db
-    .select()
-    .from(batchMeasurementLog)
-    .where(eq(batchMeasurementLog.brewBatchId, batchId))
-    .orderBy(batchMeasurementLog.loggedAt)
-    .all();
-}

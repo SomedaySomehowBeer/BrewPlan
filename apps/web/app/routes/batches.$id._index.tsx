@@ -1,8 +1,7 @@
-import { useLoaderData, useActionData, Link, Form, redirect } from "react-router";
+import { useLoaderData, Link } from "react-router";
 import type { Route } from "./+types/batches.$id._index";
 import { requireUser } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
-import { batchMeasurementLogSchema } from "@brewplan/shared";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import {
@@ -16,11 +15,8 @@ import {
 import { StatusBadge } from "~/components/shared/status-badge";
 import { UnitDisplay } from "~/components/shared/unit-display";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
 import { formatDate, formatNumber } from "~/lib/utils";
-import { Textarea } from "~/components/ui/textarea";
-import { Beaker, Thermometer, FlaskConical, Ruler, Save } from "lucide-react";
+import { Beaker, Thermometer, FlaskConical, Plus } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
@@ -31,36 +27,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   return { batch };
-}
-
-export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
-
-  const formData = await request.formData();
-  const raw: Record<string, unknown> = {};
-
-  // Only include fields that were actually submitted
-  for (const key of ["og", "fg", "volumeLitres", "ibu", "notes", "loggedBy"]) {
-    const val = formData.get(key);
-    if (val !== null && val !== "") {
-      raw[key] = val;
-    }
-  }
-
-  const result = batchMeasurementLogSchema.safeParse(raw);
-  if (!result.success) {
-    const errors = result.error.issues.reduce(
-      (acc, issue) => {
-        acc[issue.path.join(".")] = issue.message;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
-    return { errors };
-  }
-
-  queries.batches.addMeasurementEntry(params.id, result.data);
-  return redirect(`/batches/${params.id}`);
 }
 
 export default function BatchDetail() {
@@ -75,6 +41,14 @@ export default function BatchDetail() {
 
   return (
     <div className="space-y-6">
+      {/* Prominent fermentation entry */}
+      <Link to={`/batches/${batch.id}/fermentation`}>
+        <Button size="lg" className="w-full min-h-[56px] text-base">
+          <Plus className="mr-2 h-5 w-5" />
+          Log Fermentation Reading
+        </Button>
+      </Link>
+
       {/* Measurements & Recipe Info */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Recipe Info */}
@@ -120,88 +94,40 @@ export default function BatchDetail() {
           </CardContent>
         </Card>
 
-        {/* Measured Values — Editable Form */}
+        {/* Measured Values — Read-only */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Measured Values</CardTitle>
           </CardHeader>
-          <CardContent>
-            <Form method="post" className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="og" className="text-xs text-muted-foreground">OG</Label>
-                  <Input
-                    id="og"
-                    name="og"
-                    type="number"
-                    step="0.001"
-                    placeholder="1.050"
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="fg" className="text-xs text-muted-foreground">FG</Label>
-                  <Input
-                    id="fg"
-                    name="fg"
-                    type="number"
-                    step="0.001"
-                    placeholder="1.010"
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="volumeLitres" className="text-xs text-muted-foreground">Volume (L)</Label>
-                  <Input
-                    id="volumeLitres"
-                    name="volumeLitres"
-                    type="number"
-                    step="0.1"
-                    placeholder="20.0"
-                    className="h-10"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="ibu" className="text-xs text-muted-foreground">IBU</Label>
-                  <Input
-                    id="ibu"
-                    name="ibu"
-                    type="number"
-                    step="1"
-                    placeholder="35"
-                    className="h-10"
-                  />
-                </div>
+          <CardContent className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Actual OG</span>
+              <span className="font-mono">{batch.actualOg ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Actual FG</span>
+              <span className="font-mono">{batch.actualFg ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Volume</span>
+              <span className="font-mono">
+                {batch.actualVolumeLitres != null
+                  ? `${batch.actualVolumeLitres} L`
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">IBU</span>
+              <span className="font-mono">{batch.actualIbu ?? "—"}</span>
+            </div>
+            {batch.actualAbv != null && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">ABV</span>
+                <span className="font-mono">
+                  {formatNumber(batch.actualAbv)}%
+                </span>
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="loggedBy" className="text-xs text-muted-foreground">Logged By</Label>
-                <Input
-                  id="loggedBy"
-                  name="loggedBy"
-                  placeholder="Name"
-                  defaultValue={batch.brewer ?? ""}
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="notes" className="text-xs text-muted-foreground">Notes</Label>
-                <Textarea
-                  id="notes"
-                  name="notes"
-                  placeholder="Optional notes for this reading..."
-                  rows={2}
-                />
-              </div>
-              {batch.actualAbv != null && (
-                <div className="text-sm text-muted-foreground">
-                  ABV: {formatNumber(batch.actualAbv)}% <span className="text-xs">(calculated on packaging)</span>
-                </div>
-              )}
-              <Button type="submit" size="sm" className="min-h-[44px]">
-                <Save className="mr-1.5 h-4 w-4" />
-                Save Measurements
-              </Button>
-            </Form>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -260,187 +186,18 @@ export default function BatchDetail() {
         </Card>
       )}
 
-      {/* Tabs: Measurements, Consumption & Fermentation Log */}
-      <Tabs defaultValue="measurements">
+      {/* Tabs: Consumption & Fermentation Log */}
+      <Tabs defaultValue="fermentation">
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="measurements" className="flex-1 sm:flex-initial">
-            <Ruler className="mr-1.5 h-4 w-4" />
-            Measurements
+          <TabsTrigger value="fermentation" className="flex-1 sm:flex-initial">
+            <FlaskConical className="mr-1.5 h-4 w-4" />
+            Fermentation
           </TabsTrigger>
           <TabsTrigger value="consumption" className="flex-1 sm:flex-initial">
             <Beaker className="mr-1.5 h-4 w-4" />
             Consumption
           </TabsTrigger>
-          <TabsTrigger value="fermentation" className="flex-1 sm:flex-initial">
-            <FlaskConical className="mr-1.5 h-4 w-4" />
-            Fermentation
-          </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="measurements">
-          {batch.measurementLog.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No measurement entries yet. Use the form above to log a reading.
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                {/* Mobile cards */}
-                <div className="sm:hidden divide-y">
-                  {batch.measurementLog.map((entry) => (
-                    <div key={entry.id} className="p-4 space-y-1">
-                      <div className="text-xs text-muted-foreground">
-                        {formatDate(entry.loggedAt)}
-                        {entry.loggedBy && ` — ${entry.loggedBy}`}
-                      </div>
-                      <div className="flex gap-4 text-sm flex-wrap">
-                        {entry.og != null && <span>OG {entry.og}</span>}
-                        {entry.fg != null && <span>FG {entry.fg}</span>}
-                        {entry.volumeLitres != null && (
-                          <span>{entry.volumeLitres} L</span>
-                        )}
-                        {entry.ibu != null && <span>{entry.ibu} IBU</span>}
-                      </div>
-                      {entry.notes && (
-                        <p className="text-xs text-muted-foreground">
-                          {entry.notes}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {/* Desktop table */}
-                <div className="hidden sm:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date/Time</TableHead>
-                        <TableHead>OG</TableHead>
-                        <TableHead>FG</TableHead>
-                        <TableHead>Volume (L)</TableHead>
-                        <TableHead>IBU</TableHead>
-                        <TableHead>Notes</TableHead>
-                        <TableHead>By</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {batch.measurementLog.map((entry) => (
-                        <TableRow key={entry.id}>
-                          <TableCell className="text-xs">
-                            {formatDate(entry.loggedAt)}
-                          </TableCell>
-                          <TableCell>{entry.og ?? "—"}</TableCell>
-                          <TableCell>{entry.fg ?? "—"}</TableCell>
-                          <TableCell>
-                            {entry.volumeLitres != null
-                              ? `${entry.volumeLitres}`
-                              : "—"}
-                          </TableCell>
-                          <TableCell>{entry.ibu ?? "—"}</TableCell>
-                          <TableCell className="max-w-[200px] truncate text-xs">
-                            {entry.notes ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {entry.loggedBy ?? "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="consumption">
-          {batch.consumptions.length === 0 ? (
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                No consumption records yet.
-                <div className="mt-3">
-                  <Link
-                    to={`/batches/${batch.id}/consumption`}
-                    className="text-primary underline"
-                  >
-                    Record ingredient usage
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                {/* Mobile cards */}
-                <div className="sm:hidden divide-y">
-                  {batch.consumptions.map((c) => (
-                    <div key={c.id} className="p-4 space-y-1">
-                      <div className="font-medium text-sm">
-                        {c.inventoryItemName}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Lot: {c.lotNumber} | Stage: {c.usageStage}
-                      </div>
-                      <div className="text-sm">
-                        Planned: <UnitDisplay value={c.plannedQuantity} unit={c.unit} /> |
-                        Actual: <UnitDisplay value={c.actualQuantity} unit={c.unit} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Desktop table */}
-                <div className="hidden sm:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Ingredient</TableHead>
-                        <TableHead>Lot</TableHead>
-                        <TableHead>Planned</TableHead>
-                        <TableHead>Actual</TableHead>
-                        <TableHead>Stage</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {batch.consumptions.map((c) => (
-                        <TableRow key={c.id}>
-                          <TableCell className="font-medium">
-                            {c.inventoryItemName}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {c.lotNumber}
-                          </TableCell>
-                          <TableCell>
-                            <UnitDisplay
-                              value={c.plannedQuantity}
-                              unit={c.unit}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <UnitDisplay
-                              value={c.actualQuantity}
-                              unit={c.unit}
-                            />
-                          </TableCell>
-                          <TableCell>{c.usageStage}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-              <div className="p-4 border-t">
-                <Link
-                  to={`/batches/${batch.id}/consumption`}
-                  className="text-sm text-primary underline"
-                >
-                  Add consumption record
-                </Link>
-              </div>
-            </Card>
-          )}
-        </TabsContent>
 
         <TabsContent value="fermentation">
           {batch.fermentationLog.length === 0 ? (
@@ -535,6 +292,93 @@ export default function BatchDetail() {
                   className="text-sm text-primary underline"
                 >
                   Add fermentation reading
+                </Link>
+              </div>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="consumption">
+          {batch.consumptions.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                No consumption records yet.
+                <div className="mt-3">
+                  <Link
+                    to={`/batches/${batch.id}/consumption`}
+                    className="text-primary underline"
+                  >
+                    Record ingredient usage
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                {/* Mobile cards */}
+                <div className="sm:hidden divide-y">
+                  {batch.consumptions.map((c) => (
+                    <div key={c.id} className="p-4 space-y-1">
+                      <div className="font-medium text-sm">
+                        {c.inventoryItemName}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Lot: {c.lotNumber} | Stage: {c.usageStage}
+                      </div>
+                      <div className="text-sm">
+                        Planned: <UnitDisplay value={c.plannedQuantity} unit={c.unit} /> |
+                        Actual: <UnitDisplay value={c.actualQuantity} unit={c.unit} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden sm:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Ingredient</TableHead>
+                        <TableHead>Lot</TableHead>
+                        <TableHead>Planned</TableHead>
+                        <TableHead>Actual</TableHead>
+                        <TableHead>Stage</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {batch.consumptions.map((c) => (
+                        <TableRow key={c.id}>
+                          <TableCell className="font-medium">
+                            {c.inventoryItemName}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {c.lotNumber}
+                          </TableCell>
+                          <TableCell>
+                            <UnitDisplay
+                              value={c.plannedQuantity}
+                              unit={c.unit}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <UnitDisplay
+                              value={c.actualQuantity}
+                              unit={c.unit}
+                            />
+                          </TableCell>
+                          <TableCell>{c.usageStage}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+              <div className="p-4 border-t">
+                <Link
+                  to={`/batches/${batch.id}/consumption`}
+                  className="text-sm text-primary underline"
+                >
+                  Add consumption record
                 </Link>
               </div>
             </Card>
