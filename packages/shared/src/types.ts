@@ -7,6 +7,11 @@ import type {
   Unit,
   VesselType,
   VesselStatus,
+  PackageFormat,
+  PurchaseOrderStatus,
+  CustomerType,
+  OrderStatus,
+  OrderChannel,
 } from "./enums";
 
 // ── Auth ──────────────────────────────────────────────
@@ -173,6 +178,138 @@ export interface Vessel {
   archived: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// ── Packaging ────────────────────────────────────────
+export interface PackagingRun {
+  id: string;
+  brewBatchId: string;
+  packagingDate: string;
+  format: PackageFormat;
+  formatCustom: string | null;
+  quantityUnits: number;
+  volumeLitres: number;
+  bestBeforeDate: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface FinishedGoodsStock {
+  id: string;
+  packagingRunId: string;
+  brewBatchId: string;
+  recipeId: string;
+  productName: string;
+  format: PackageFormat;
+  quantityOnHand: number;
+  quantityReserved: number;
+  quantityAvailable: number;
+  unitPrice: number | null;
+  bestBeforeDate: string | null;
+  location: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Suppliers ────────────────────────────────────────
+export interface Supplier {
+  id: string;
+  name: string;
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  website: string | null;
+  paymentTerms: string | null;
+  leadTimeDays: number | null;
+  minimumOrderValue: number | null;
+  notes: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Purchasing ───────────────────────────────────────
+export interface PurchaseOrder {
+  id: string;
+  poNumber: string;
+  supplierId: string;
+  status: PurchaseOrderStatus;
+  orderDate: string | null;
+  expectedDeliveryDate: string | null;
+  subtotal: number;
+  tax: number;
+  total: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseOrderLine {
+  id: string;
+  purchaseOrderId: string;
+  inventoryItemId: string;
+  quantityOrdered: number;
+  quantityReceived: number;
+  unit: Unit;
+  unitCost: number;
+  lineTotal: number;
+  notes: string | null;
+}
+
+// ── Customers ────────────────────────────────────────
+export interface Customer {
+  id: string;
+  name: string;
+  customerType: CustomerType;
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string;
+  deliveryInstructions: string | null;
+  paymentTerms: string | null;
+  notes: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Orders ───────────────────────────────────────────
+export interface Order {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  status: OrderStatus;
+  orderDate: string | null;
+  deliveryDate: string | null;
+  deliveryAddress: string | null;
+  channel: OrderChannel;
+  subtotal: number;
+  tax: number;
+  total: number;
+  notes: string | null;
+  invoiceNumber: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderLine {
+  id: string;
+  orderId: string;
+  recipeId: string;
+  format: PackageFormat;
+  finishedGoodsId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  notes: string | null;
 }
 
 // ── Planning ──────────────────────────────────────────

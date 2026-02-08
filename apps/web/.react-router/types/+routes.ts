@@ -14,6 +14,48 @@ type Pages = {
   "/": {
     params: {};
   };
+  "/purchasing": {
+    params: {};
+  };
+  "/purchasing/:id": {
+    params: {
+      "id": string;
+    };
+  };
+  "/purchasing/:id/transition": {
+    params: {
+      "id": string;
+    };
+  };
+  "/purchasing/:id/receive": {
+    params: {
+      "id": string;
+    };
+  };
+  "/purchasing/:id/lines": {
+    params: {
+      "id": string;
+    };
+  };
+  "/purchasing/new": {
+    params: {};
+  };
+  "/customers": {
+    params: {};
+  };
+  "/customers/:id": {
+    params: {
+      "id": string;
+    };
+  };
+  "/customers/:id/edit": {
+    params: {
+      "id": string;
+    };
+  };
+  "/customers/new": {
+    params: {};
+  };
   "/inventory": {
     params: {};
   };
@@ -40,13 +82,38 @@ type Pages = {
   "/inventory/new": {
     params: {};
   };
+  "/suppliers": {
+    params: {};
+  };
+  "/suppliers/:id": {
+    params: {
+      "id": string;
+    };
+  };
+  "/suppliers/:id/edit": {
+    params: {
+      "id": string;
+    };
+  };
+  "/suppliers/new": {
+    params: {};
+  };
   "/planning": {
+    params: {};
+  };
+  "/planning/purchasing": {
     params: {};
   };
   "/planning/materials": {
     params: {};
   };
+  "/planning/packaging": {
+    params: {};
+  };
   "/planning/schedule": {
+    params: {};
+  };
+  "/planning/demand": {
     params: {};
   };
   "/batches": {
@@ -68,6 +135,11 @@ type Pages = {
     };
   };
   "/batches/:id/transition": {
+    params: {
+      "id": string;
+    };
+  };
+  "/batches/:id/packaging": {
     params: {
       "id": string;
     };
@@ -110,15 +182,105 @@ type Pages = {
   "/logout": {
     params: {};
   };
+  "/orders": {
+    params: {};
+  };
+  "/orders/:id": {
+    params: {
+      "id": string;
+    };
+  };
+  "/orders/:id/transition": {
+    params: {
+      "id": string;
+    };
+  };
+  "/orders/:id/lines": {
+    params: {
+      "id": string;
+    };
+  };
+  "/orders/:id/pick": {
+    params: {
+      "id": string;
+    };
+  };
+  "/orders/new": {
+    params: {};
+  };
   "/login": {
     params: {};
+  };
+  "/stock": {
+    params: {};
+  };
+  "/stock/:id": {
+    params: {
+      "id": string;
+    };
   };
 };
 
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/inventory" | "/inventory/:id" | "/inventory/:id/movements" | "/inventory/:id/edit" | "/inventory/:id/lots" | "/inventory/new" | "/planning" | "/planning/materials" | "/planning/schedule" | "/batches" | "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition" | "/batches/new" | "/recipes" | "/recipes/:id" | "/recipes/:id/ingredients" | "/recipes/:id/edit" | "/recipes/new" | "/vessels" | "/vessels/:id" | "/vessels/new" | "/logout" | "/login";
+    page: "/" | "/purchasing" | "/purchasing/:id" | "/purchasing/:id/transition" | "/purchasing/:id/receive" | "/purchasing/:id/lines" | "/purchasing/new" | "/customers" | "/customers/:id" | "/customers/:id/edit" | "/customers/new" | "/inventory" | "/inventory/:id" | "/inventory/:id/movements" | "/inventory/:id/edit" | "/inventory/:id/lots" | "/inventory/new" | "/suppliers" | "/suppliers/:id" | "/suppliers/:id/edit" | "/suppliers/new" | "/planning" | "/planning/purchasing" | "/planning/materials" | "/planning/packaging" | "/planning/schedule" | "/planning/demand" | "/batches" | "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition" | "/batches/:id/packaging" | "/batches/new" | "/recipes" | "/recipes/:id" | "/recipes/:id/ingredients" | "/recipes/:id/edit" | "/recipes/new" | "/vessels" | "/vessels/:id" | "/vessels/new" | "/logout" | "/orders" | "/orders/:id" | "/orders/:id/transition" | "/orders/:id/lines" | "/orders/:id/pick" | "/orders/new" | "/login" | "/stock" | "/stock/:id";
+  };
+  "routes/purchasing.tsx": {
+    id: "routes/purchasing";
+    page: "/purchasing" | "/purchasing/:id" | "/purchasing/:id/transition" | "/purchasing/:id/receive" | "/purchasing/:id/lines" | "/purchasing/new";
+  };
+  "routes/purchasing._index.tsx": {
+    id: "routes/purchasing._index";
+    page: "/purchasing";
+  };
+  "routes/purchasing.$id.tsx": {
+    id: "routes/purchasing.$id";
+    page: "/purchasing/:id" | "/purchasing/:id/transition" | "/purchasing/:id/receive" | "/purchasing/:id/lines";
+  };
+  "routes/purchasing.$id.transition.tsx": {
+    id: "routes/purchasing.$id.transition";
+    page: "/purchasing/:id/transition";
+  };
+  "routes/purchasing.$id.receive.tsx": {
+    id: "routes/purchasing.$id.receive";
+    page: "/purchasing/:id/receive";
+  };
+  "routes/purchasing.$id._index.tsx": {
+    id: "routes/purchasing.$id._index";
+    page: "/purchasing/:id";
+  };
+  "routes/purchasing.$id.lines.tsx": {
+    id: "routes/purchasing.$id.lines";
+    page: "/purchasing/:id/lines";
+  };
+  "routes/purchasing.new.tsx": {
+    id: "routes/purchasing.new";
+    page: "/purchasing/new";
+  };
+  "routes/customers.tsx": {
+    id: "routes/customers";
+    page: "/customers" | "/customers/:id" | "/customers/:id/edit" | "/customers/new";
+  };
+  "routes/customers._index.tsx": {
+    id: "routes/customers._index";
+    page: "/customers";
+  };
+  "routes/customers.$id.tsx": {
+    id: "routes/customers.$id";
+    page: "/customers/:id" | "/customers/:id/edit";
+  };
+  "routes/customers.$id._index.tsx": {
+    id: "routes/customers.$id._index";
+    page: "/customers/:id";
+  };
+  "routes/customers.$id.edit.tsx": {
+    id: "routes/customers.$id.edit";
+    page: "/customers/:id/edit";
+  };
+  "routes/customers.new.tsx": {
+    id: "routes/customers.new";
+    page: "/customers/new";
   };
   "routes/inventory.tsx": {
     id: "routes/inventory";
@@ -152,13 +314,45 @@ type RouteFiles = {
     id: "routes/inventory.new";
     page: "/inventory/new";
   };
+  "routes/suppliers.tsx": {
+    id: "routes/suppliers";
+    page: "/suppliers" | "/suppliers/:id" | "/suppliers/:id/edit" | "/suppliers/new";
+  };
+  "routes/suppliers._index.tsx": {
+    id: "routes/suppliers._index";
+    page: "/suppliers";
+  };
+  "routes/suppliers.$id.tsx": {
+    id: "routes/suppliers.$id";
+    page: "/suppliers/:id" | "/suppliers/:id/edit";
+  };
+  "routes/suppliers.$id._index.tsx": {
+    id: "routes/suppliers.$id._index";
+    page: "/suppliers/:id";
+  };
+  "routes/suppliers.$id.edit.tsx": {
+    id: "routes/suppliers.$id.edit";
+    page: "/suppliers/:id/edit";
+  };
+  "routes/suppliers.new.tsx": {
+    id: "routes/suppliers.new";
+    page: "/suppliers/new";
+  };
   "routes/planning.tsx": {
     id: "routes/planning";
-    page: "/planning" | "/planning/materials" | "/planning/schedule";
+    page: "/planning" | "/planning/purchasing" | "/planning/materials" | "/planning/packaging" | "/planning/schedule" | "/planning/demand";
+  };
+  "routes/planning.purchasing.tsx": {
+    id: "routes/planning.purchasing";
+    page: "/planning/purchasing";
   };
   "routes/planning.materials.tsx": {
     id: "routes/planning.materials";
     page: "/planning/materials";
+  };
+  "routes/planning.packaging.tsx": {
+    id: "routes/planning.packaging";
+    page: "/planning/packaging";
   };
   "routes/planning.schedule.tsx": {
     id: "routes/planning.schedule";
@@ -168,9 +362,13 @@ type RouteFiles = {
     id: "routes/planning._index";
     page: "/planning";
   };
+  "routes/planning.demand.tsx": {
+    id: "routes/planning.demand";
+    page: "/planning/demand";
+  };
   "routes/batches.tsx": {
     id: "routes/batches";
-    page: "/batches" | "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition" | "/batches/new";
+    page: "/batches" | "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition" | "/batches/:id/packaging" | "/batches/new";
   };
   "routes/batches._index.tsx": {
     id: "routes/batches._index";
@@ -178,7 +376,7 @@ type RouteFiles = {
   };
   "routes/batches.$id.tsx": {
     id: "routes/batches.$id";
-    page: "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition";
+    page: "/batches/:id" | "/batches/:id/fermentation" | "/batches/:id/consumption" | "/batches/:id/transition" | "/batches/:id/packaging";
   };
   "routes/batches.$id.fermentation.tsx": {
     id: "routes/batches.$id.fermentation";
@@ -191,6 +389,10 @@ type RouteFiles = {
   "routes/batches.$id.transition.tsx": {
     id: "routes/batches.$id.transition";
     page: "/batches/:id/transition";
+  };
+  "routes/batches.$id.packaging.tsx": {
+    id: "routes/batches.$id.packaging";
+    page: "/batches/:id/packaging";
   };
   "routes/batches.$id._index.tsx": {
     id: "routes/batches.$id._index";
@@ -252,14 +454,72 @@ type RouteFiles = {
     id: "routes/logout";
     page: "/logout";
   };
+  "routes/orders.tsx": {
+    id: "routes/orders";
+    page: "/orders" | "/orders/:id" | "/orders/:id/transition" | "/orders/:id/lines" | "/orders/:id/pick" | "/orders/new";
+  };
+  "routes/orders._index.tsx": {
+    id: "routes/orders._index";
+    page: "/orders";
+  };
+  "routes/orders.$id.tsx": {
+    id: "routes/orders.$id";
+    page: "/orders/:id" | "/orders/:id/transition" | "/orders/:id/lines" | "/orders/:id/pick";
+  };
+  "routes/orders.$id.transition.tsx": {
+    id: "routes/orders.$id.transition";
+    page: "/orders/:id/transition";
+  };
+  "routes/orders.$id._index.tsx": {
+    id: "routes/orders.$id._index";
+    page: "/orders/:id";
+  };
+  "routes/orders.$id.lines.tsx": {
+    id: "routes/orders.$id.lines";
+    page: "/orders/:id/lines";
+  };
+  "routes/orders.$id.pick.tsx": {
+    id: "routes/orders.$id.pick";
+    page: "/orders/:id/pick";
+  };
+  "routes/orders.new.tsx": {
+    id: "routes/orders.new";
+    page: "/orders/new";
+  };
   "routes/login.tsx": {
     id: "routes/login";
     page: "/login";
+  };
+  "routes/stock.tsx": {
+    id: "routes/stock";
+    page: "/stock" | "/stock/:id";
+  };
+  "routes/stock._index.tsx": {
+    id: "routes/stock._index";
+    page: "/stock";
+  };
+  "routes/stock.$id.tsx": {
+    id: "routes/stock.$id";
+    page: "/stock/:id";
   };
 };
 
 type RouteModules = {
   "root": typeof import("./app/root.tsx");
+  "routes/purchasing": typeof import("./app/routes/purchasing.tsx");
+  "routes/purchasing._index": typeof import("./app/routes/purchasing._index.tsx");
+  "routes/purchasing.$id": typeof import("./app/routes/purchasing.$id.tsx");
+  "routes/purchasing.$id.transition": typeof import("./app/routes/purchasing.$id.transition.tsx");
+  "routes/purchasing.$id.receive": typeof import("./app/routes/purchasing.$id.receive.tsx");
+  "routes/purchasing.$id._index": typeof import("./app/routes/purchasing.$id._index.tsx");
+  "routes/purchasing.$id.lines": typeof import("./app/routes/purchasing.$id.lines.tsx");
+  "routes/purchasing.new": typeof import("./app/routes/purchasing.new.tsx");
+  "routes/customers": typeof import("./app/routes/customers.tsx");
+  "routes/customers._index": typeof import("./app/routes/customers._index.tsx");
+  "routes/customers.$id": typeof import("./app/routes/customers.$id.tsx");
+  "routes/customers.$id._index": typeof import("./app/routes/customers.$id._index.tsx");
+  "routes/customers.$id.edit": typeof import("./app/routes/customers.$id.edit.tsx");
+  "routes/customers.new": typeof import("./app/routes/customers.new.tsx");
   "routes/inventory": typeof import("./app/routes/inventory.tsx");
   "routes/inventory._index": typeof import("./app/routes/inventory._index.tsx");
   "routes/inventory.$id": typeof import("./app/routes/inventory.$id.tsx");
@@ -268,16 +528,26 @@ type RouteModules = {
   "routes/inventory.$id.edit": typeof import("./app/routes/inventory.$id.edit.tsx");
   "routes/inventory.$id.lots": typeof import("./app/routes/inventory.$id.lots.tsx");
   "routes/inventory.new": typeof import("./app/routes/inventory.new.tsx");
+  "routes/suppliers": typeof import("./app/routes/suppliers.tsx");
+  "routes/suppliers._index": typeof import("./app/routes/suppliers._index.tsx");
+  "routes/suppliers.$id": typeof import("./app/routes/suppliers.$id.tsx");
+  "routes/suppliers.$id._index": typeof import("./app/routes/suppliers.$id._index.tsx");
+  "routes/suppliers.$id.edit": typeof import("./app/routes/suppliers.$id.edit.tsx");
+  "routes/suppliers.new": typeof import("./app/routes/suppliers.new.tsx");
   "routes/planning": typeof import("./app/routes/planning.tsx");
+  "routes/planning.purchasing": typeof import("./app/routes/planning.purchasing.tsx");
   "routes/planning.materials": typeof import("./app/routes/planning.materials.tsx");
+  "routes/planning.packaging": typeof import("./app/routes/planning.packaging.tsx");
   "routes/planning.schedule": typeof import("./app/routes/planning.schedule.tsx");
   "routes/planning._index": typeof import("./app/routes/planning._index.tsx");
+  "routes/planning.demand": typeof import("./app/routes/planning.demand.tsx");
   "routes/batches": typeof import("./app/routes/batches.tsx");
   "routes/batches._index": typeof import("./app/routes/batches._index.tsx");
   "routes/batches.$id": typeof import("./app/routes/batches.$id.tsx");
   "routes/batches.$id.fermentation": typeof import("./app/routes/batches.$id.fermentation.tsx");
   "routes/batches.$id.consumption": typeof import("./app/routes/batches.$id.consumption.tsx");
   "routes/batches.$id.transition": typeof import("./app/routes/batches.$id.transition.tsx");
+  "routes/batches.$id.packaging": typeof import("./app/routes/batches.$id.packaging.tsx");
   "routes/batches.$id._index": typeof import("./app/routes/batches.$id._index.tsx");
   "routes/batches.new": typeof import("./app/routes/batches.new.tsx");
   "routes/recipes": typeof import("./app/routes/recipes.tsx");
@@ -293,5 +563,16 @@ type RouteModules = {
   "routes/vessels.new": typeof import("./app/routes/vessels.new.tsx");
   "routes/_index": typeof import("./app/routes/_index.tsx");
   "routes/logout": typeof import("./app/routes/logout.tsx");
+  "routes/orders": typeof import("./app/routes/orders.tsx");
+  "routes/orders._index": typeof import("./app/routes/orders._index.tsx");
+  "routes/orders.$id": typeof import("./app/routes/orders.$id.tsx");
+  "routes/orders.$id.transition": typeof import("./app/routes/orders.$id.transition.tsx");
+  "routes/orders.$id._index": typeof import("./app/routes/orders.$id._index.tsx");
+  "routes/orders.$id.lines": typeof import("./app/routes/orders.$id.lines.tsx");
+  "routes/orders.$id.pick": typeof import("./app/routes/orders.$id.pick.tsx");
+  "routes/orders.new": typeof import("./app/routes/orders.new.tsx");
   "routes/login": typeof import("./app/routes/login.tsx");
+  "routes/stock": typeof import("./app/routes/stock.tsx");
+  "routes/stock._index": typeof import("./app/routes/stock._index.tsx");
+  "routes/stock.$id": typeof import("./app/routes/stock.$id.tsx");
 };

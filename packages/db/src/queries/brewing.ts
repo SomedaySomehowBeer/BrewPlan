@@ -9,9 +9,11 @@ import {
   inventoryLots,
   inventoryItems,
   vessels,
+  packagingRuns,
 } from "../schema/index";
 import { BATCH_TRANSITIONS, type BatchStatus } from "@brewplan/shared";
 import { recordMovement } from "./inventory";
+import { listByBatch as listPackagingRuns, createFinishedGoods, getFormatLabel } from "./packaging";
 
 // ── List ─────────────────────────────────────────────
 
@@ -298,6 +300,13 @@ export function transition(id: string, toStatus: BatchStatus) {
     }
   }
 
+  if (currentStatus === "ready_to_package" && toStatus === "packaged") {
+    const runs = listPackagingRuns(id);
+    if (runs.length === 0) {
+      throw new Error("At least one packaging run must be recorded before marking as packaged");
+    }
+  }
+
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = {
     status: toStatus,
@@ -345,6 +354,30 @@ export function transition(id: string, toStatus: BatchStatus) {
     if (batch.actualOg && batch.actualFg) {
       updates.actualAbv =
         (batch.actualOg - batch.actualFg) * 131.25;
+    }
+  }
+
+  if (currentStatus === "ready_to_package" && toStatus === "packaged") {
+    // Create FinishedGoodsStock records from packaging runs
+    const recipe = db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, batch.recipeId))
+      .get();
+    const recipeName = recipe?.name ?? "Unknown";
+
+    const runs = listPackagingRuns(id);
+    for (const run of runs) {
+      const formatLabel = getFormatLabel(run.format);
+      createFinishedGoods({
+        packagingRunId: run.id,
+        brewBatchId: id,
+        recipeId: batch.recipeId,
+        productName: `${recipeName} — ${formatLabel}`,
+        format: run.format,
+        quantityOnHand: run.quantityUnits,
+        bestBeforeDate: run.bestBeforeDate,
+      });
     }
   }
 

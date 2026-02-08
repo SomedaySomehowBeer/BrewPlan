@@ -8,6 +8,8 @@ import {
   brewBatches,
   recipes,
   recipeIngredients,
+  purchaseOrderLines,
+  purchaseOrders,
 } from "../schema/index";
 import type { InventoryCategory } from "@brewplan/shared";
 
@@ -114,7 +116,31 @@ export function getPosition(id: string) {
 
   const quantityAllocated = allocatedResult?.total ?? 0;
   const quantityAvailable = quantityOnHand - quantityAllocated;
-  const quantityOnOrder = 0; // Phase 1: no purchase orders yet
+
+  // Real quantity on order from active purchase orders
+  const onOrderResult = db
+    .select({
+      total:
+        sql<number>`coalesce(sum(${purchaseOrderLines.quantityOrdered} - ${purchaseOrderLines.quantityReceived}), 0)`,
+    })
+    .from(purchaseOrderLines)
+    .innerJoin(
+      purchaseOrders,
+      eq(purchaseOrderLines.purchaseOrderId, purchaseOrders.id)
+    )
+    .where(
+      and(
+        eq(purchaseOrderLines.inventoryItemId, id),
+        inArray(purchaseOrders.status, [
+          "sent",
+          "acknowledged",
+          "partially_received",
+        ])
+      )
+    )
+    .get();
+
+  const quantityOnOrder = onOrderResult?.total ?? 0;
   const quantityProjected = quantityAvailable + quantityOnOrder;
 
   return {

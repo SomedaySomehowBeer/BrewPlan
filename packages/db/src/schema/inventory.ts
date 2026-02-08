@@ -1,9 +1,11 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { suppliers } from "./suppliers";
 
 export const inventoryItems = sqliteTable("inventory_items", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   sku: text("sku"),
+  supplierId: text("supplier_id").references(() => suppliers.id),
   category: text("category", {
     enum: [
       "grain",
@@ -44,6 +46,7 @@ export const inventoryLots = sqliteTable("inventory_lots", {
   unitCost: real("unit_cost").notNull(),
   receivedDate: text("received_date").notNull(),
   expiryDate: text("expiry_date"),
+  purchaseOrderId: text("purchase_order_id"),
   location: text("location"),
   notes: text("notes"),
   createdAt: text("created_at").notNull(),

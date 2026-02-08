@@ -318,4 +318,219 @@ if (paleAleId && fv1Id) {
   }
 }
 
+// ── Seed Suppliers ───────────────────────────────────
+const supplierData = [
+  {
+    name: "Grouse Malting",
+    contactName: "Sarah Mitchell",
+    email: "orders@grousemalting.com.au",
+    phone: "08 9756 1234",
+    address: "42 Industrial Way, Brunswick WA 6224",
+    website: "https://grousemalting.com.au",
+    paymentTerms: "Net 30",
+    leadTimeDays: 5,
+    minimumOrderValue: 200,
+    notes: "Primary GF malt supplier. Local to WA.",
+  },
+  {
+    name: "Hopco Australia",
+    contactName: "David Chen",
+    email: "sales@hopco.com.au",
+    phone: "03 9421 5678",
+    address: "15 Hop Lane, Myrtleford VIC 3737",
+    paymentTerms: "Net 14",
+    leadTimeDays: 7,
+    minimumOrderValue: 150,
+    notes: "Australian and imported hops.",
+  },
+  {
+    name: "YeastWest",
+    contactName: "Lisa Park",
+    email: "info@yeastwest.com.au",
+    phone: "08 9335 9012",
+    address: "8 Ferment Drive, Fremantle WA 6160",
+    paymentTerms: "COD",
+    leadTimeDays: 3,
+    minimumOrderValue: 50,
+    notes: "Yeast and enzymes. Same-week delivery in WA.",
+  },
+];
+
+const supplierIds: Record<string, string> = {};
+for (const sup of supplierData) {
+  const existing = db
+    .select()
+    .from(schema.suppliers)
+    .where(eq(schema.suppliers.name, sup.name))
+    .get();
+
+  if (!existing) {
+    const created = queries.suppliers.create(sup);
+    supplierIds[sup.name] = created.id;
+    console.log(`Created supplier: ${sup.name}`);
+  } else {
+    supplierIds[sup.name] = existing.id;
+    console.log(`Supplier exists: ${sup.name}`);
+  }
+}
+
+// Link inventory items to suppliers
+const itemSupplierMap: Record<string, string> = {
+  "Millet Malt": "Grouse Malting",
+  "Buckwheat Malt": "Grouse Malting",
+  "Rice Malt": "Grouse Malting",
+  "Cascade Hops": "Hopco Australia",
+  "Citra Hops": "Hopco Australia",
+  "Galaxy Hops": "Hopco Australia",
+  "Safale US-05": "YeastWest",
+  "Clarity Ferm": "YeastWest",
+};
+
+for (const [itemName, supplierName] of Object.entries(itemSupplierMap)) {
+  const itemId = inventoryItems[itemName];
+  const supplierId = supplierIds[supplierName];
+  if (itemId && supplierId) {
+    const item = db
+      .select()
+      .from(schema.inventoryItems)
+      .where(eq(schema.inventoryItems.id, itemId))
+      .get();
+    if (item && !item.supplierId) {
+      queries.inventory.update(itemId, { supplierId } as Record<string, unknown>);
+      console.log(`Linked ${itemName} → ${supplierName}`);
+    }
+  }
+}
+
+// ── Seed Customers ──────────────────────────────────
+const customerData = [
+  {
+    name: "The Eagle Bar",
+    customerType: "venue" as const,
+    contactName: "James O'Brien",
+    email: "james@theeaglebar.com.au",
+    phone: "08 9755 2345",
+    addressLine1: "12 Queen Street",
+    city: "Busselton",
+    state: "WA",
+    postcode: "6280",
+    paymentTerms: "Net 14",
+    deliveryInstructions: "Rear loading dock, ring bell",
+  },
+  {
+    name: "Vasse Valley Wines & Beer",
+    customerType: "bottle_shop" as const,
+    contactName: "Kim Nguyen",
+    email: "kim@vassevalley.com.au",
+    phone: "08 9756 3456",
+    addressLine1: "88 Bussell Highway",
+    city: "Vasse",
+    state: "WA",
+    postcode: "6280",
+    paymentTerms: "Net 30",
+  },
+  {
+    name: "Margaret River Markets",
+    customerType: "market" as const,
+    contactName: "Community Markets Inc",
+    email: "stalls@mrmarkets.com.au",
+    phone: "08 9757 4567",
+    addressLine1: "Education Drive",
+    city: "Margaret River",
+    state: "WA",
+    postcode: "6285",
+    paymentTerms: "COD",
+    deliveryInstructions: "Saturday mornings only. Stall 22.",
+  },
+  {
+    name: "Taproom Walk-in",
+    customerType: "taproom" as const,
+    notes: "Walk-in taproom sales. No delivery needed.",
+  },
+];
+
+const customerIds: Record<string, string> = {};
+for (const cust of customerData) {
+  const existing = db
+    .select()
+    .from(schema.customers)
+    .where(eq(schema.customers.name, cust.name))
+    .get();
+
+  if (!existing) {
+    const created = queries.customers.create(cust);
+    customerIds[cust.name] = created.id;
+    console.log(`Created customer: ${cust.name}`);
+  } else {
+    customerIds[cust.name] = existing.id;
+    console.log(`Customer exists: ${cust.name}`);
+  }
+}
+
+// ── Seed a Draft PO ─────────────────────────────────
+const grouseMaltingId = supplierIds["Grouse Malting"];
+if (grouseMaltingId) {
+  const existingPOs = db.select().from(schema.purchaseOrders).all();
+  if (existingPOs.length === 0) {
+    const po = queries.purchasing.create({
+      supplierId: grouseMaltingId,
+      expectedDeliveryDate: "2026-02-20",
+      notes: "Restock GF malts for February brews",
+    });
+    // Add lines
+    const milletId = inventoryItems["Millet Malt"];
+    const buckwheatId = inventoryItems["Buckwheat Malt"];
+    if (milletId) {
+      queries.purchasing.addLine(po.id, {
+        inventoryItemId: milletId,
+        quantityOrdered: 50,
+        unit: "kg",
+        unitCost: 6.0,
+      });
+    }
+    if (buckwheatId) {
+      queries.purchasing.addLine(po.id, {
+        inventoryItemId: buckwheatId,
+        quantityOrdered: 25,
+        unit: "kg",
+        unitCost: 7.5,
+      });
+    }
+    console.log(`Created PO: ${po.poNumber} (draft)`);
+  } else {
+    console.log("POs already exist, skipping.");
+  }
+}
+
+// ── Seed a Draft Order ──────────────────────────────
+const eagleBarId = customerIds["The Eagle Bar"];
+if (eagleBarId && paleAleId) {
+  const existingOrders = db.select().from(schema.orders).all();
+  if (existingOrders.length === 0) {
+    const order = queries.orders.create({
+      customerId: eagleBarId,
+      deliveryDate: "2026-03-01",
+      channel: "wholesale",
+      notes: "Monthly keg order",
+    });
+    queries.orders.addLine(order.id, {
+      recipeId: paleAleId,
+      format: "keg_50l",
+      quantity: 3,
+      unitPrice: 250,
+    });
+    if (sessionIpaId) {
+      queries.orders.addLine(order.id, {
+        recipeId: sessionIpaId,
+        format: "keg_50l",
+        quantity: 2,
+        unitPrice: 230,
+      });
+    }
+    console.log(`Created order: ${order.orderNumber} (draft)`);
+  } else {
+    console.log("Orders already exist, skipping.");
+  }
+}
+
 console.log("\nSeed complete!");

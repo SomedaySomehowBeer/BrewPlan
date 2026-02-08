@@ -7,6 +7,13 @@ import {
   inventoryItems,
   inventoryLots,
   vessels,
+  purchaseOrderLines,
+  purchaseOrders,
+  orders,
+  orderLines,
+  customers,
+  finishedGoodsStock,
+  suppliers,
 } from "../schema/index";
 import type { MaterialRequirement } from "@brewplan/shared";
 
@@ -65,7 +72,31 @@ export function getMaterialsRequirements(): MaterialRequirement[] {
 
     const quantityAllocated = allocatedResult?.total ?? 0;
     const quantityAvailable = quantityOnHand - quantityAllocated;
-    const quantityOnOrder = 0; // Phase 1: no purchase orders
+
+    // Real quantity on order from active purchase orders
+    const onOrderResult = db
+      .select({
+        total:
+          sql<number>`coalesce(sum(${purchaseOrderLines.quantityOrdered} - ${purchaseOrderLines.quantityReceived}), 0)`,
+      })
+      .from(purchaseOrderLines)
+      .innerJoin(
+        purchaseOrders,
+        eq(purchaseOrderLines.purchaseOrderId, purchaseOrders.id)
+      )
+      .where(
+        and(
+          eq(purchaseOrderLines.inventoryItemId, row.inventoryItemId),
+          inArray(purchaseOrders.status, [
+            "sent",
+            "acknowledged",
+            "partially_received",
+          ])
+        )
+      )
+      .get();
+
+    const quantityOnOrder = onOrderResult?.total ?? 0;
     const shortfall = Math.max(0, row.quantityNeeded - quantityAvailable - quantityOnOrder);
 
     return {
@@ -118,4 +149,304 @@ export function getBrewSchedule() {
     )
     .orderBy(brewBatches.plannedDate, brewBatches.createdAt)
     .all();
+}
+
+// ── Demand View ─────────────────────────────────────
+// Orders due by week, demand by recipe+format, unfulfillable orders
+
+export function getDemandView(weeksAhead = 8) {
+  const now = new Date();
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() + weeksAhead * 7);
+  const cutoffStr = cutoff.toISOString().split("T")[0];
+
+  // Orders due in range
+  const upcomingOrders = db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      customerId: orders.customerId,
+      status: orders.status,
+      deliveryDate: orders.deliveryDate,
+      total: orders.total,
+      customerName: customers.name,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(
+      and(
+        inArray(orders.status, ["confirmed", "picking"]),
+        sql`${orders.deliveryDate} <= ${cutoffStr}`
+      )
+    )
+    .orderBy(orders.deliveryDate)
+    .all();
+
+  // Demand by recipe + format
+  const demand = db
+    .select({
+      recipeId: orderLines.recipeId,
+      recipeName: recipes.name,
+      format: orderLines.format,
+      totalQuantity: sql<number>`sum(${orderLines.quantity})`,
+    })
+    .from(orderLines)
+    .innerJoin(orders, eq(orderLines.orderId, orders.id))
+    .innerJoin(recipes, eq(orderLines.recipeId, recipes.id))
+    .where(
+      and(
+        inArray(orders.status, ["confirmed", "picking"]),
+        sql`${orders.deliveryDate} <= ${cutoffStr}`
+      )
+    )
+    .groupBy(orderLines.recipeId, orderLines.format)
+    .all();
+
+  // Unfulfillable: demand exceeding available FG stock
+  const unfulfillable = demand.filter((d) => {
+    const fgResult = db
+      .select({
+        available:
+          sql<number>`coalesce(sum(${finishedGoodsStock.quantityOnHand} - ${finishedGoodsStock.quantityReserved}), 0)`,
+      })
+      .from(finishedGoodsStock)
+      .where(
+        and(
+          eq(finishedGoodsStock.recipeId, d.recipeId),
+          eq(finishedGoodsStock.format, d.format)
+        )
+      )
+      .get();
+
+    const available = fgResult?.available ?? 0;
+    return d.totalQuantity > available;
+  });
+
+  return { upcomingOrders, demand, unfulfillable };
+}
+
+// ── Packaging Priority ──────────────────────────────
+// Batches in ready_to_package ranked by order urgency
+
+export function getPackagingPriority() {
+  const readyBatches = db
+    .select({
+      id: brewBatches.id,
+      batchNumber: brewBatches.batchNumber,
+      recipeId: brewBatches.recipeId,
+      recipeName: recipes.name,
+      batchSizeLitres: brewBatches.batchSizeLitres,
+      actualVolumeLitres: brewBatches.actualVolumeLitres,
+      estimatedReadyDate: brewBatches.estimatedReadyDate,
+      vesselId: brewBatches.vesselId,
+      vesselName: vessels.name,
+      brewDate: brewBatches.brewDate,
+    })
+    .from(brewBatches)
+    .innerJoin(recipes, eq(brewBatches.recipeId, recipes.id))
+    .leftJoin(vessels, eq(brewBatches.vesselId, vessels.id))
+    .where(eq(brewBatches.status, "ready_to_package"))
+    .orderBy(brewBatches.brewDate)
+    .all();
+
+  // Enrich with order demand and days in tank
+  const today = new Date();
+  return readyBatches.map((batch) => {
+    // Days in tank since brew date
+    const brewDate = batch.brewDate ? new Date(batch.brewDate) : today;
+    const daysInTank = Math.floor(
+      (today.getTime() - brewDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    // Matching order demand for this recipe
+    const demandResult = db
+      .select({
+        totalQuantity: sql<number>`sum(${orderLines.quantity})`,
+        earliestDelivery: sql<string>`min(${orders.deliveryDate})`,
+      })
+      .from(orderLines)
+      .innerJoin(orders, eq(orderLines.orderId, orders.id))
+      .where(
+        and(
+          eq(orderLines.recipeId, batch.recipeId),
+          inArray(orders.status, ["confirmed", "picking"])
+        )
+      )
+      .get();
+
+    return {
+      ...batch,
+      daysInTank,
+      orderDemand: demandResult?.totalQuantity ?? 0,
+      earliestDelivery: demandResult?.earliestDelivery ?? null,
+    };
+  });
+}
+
+// ── Suggested Brews ─────────────────────────────────
+// Recipes with demand but no planned/in-progress batches to meet it
+
+export function getSuggestedBrews() {
+  // Get demand by recipe from confirmed/picking orders
+  const demandByRecipe = db
+    .select({
+      recipeId: orderLines.recipeId,
+      recipeName: recipes.name,
+      recipeStyle: recipes.style,
+      totalQuantity: sql<number>`sum(${orderLines.quantity})`,
+      earliestDelivery: sql<string>`min(${orders.deliveryDate})`,
+    })
+    .from(orderLines)
+    .innerJoin(orders, eq(orderLines.orderId, orders.id))
+    .innerJoin(recipes, eq(orderLines.recipeId, recipes.id))
+    .where(inArray(orders.status, ["confirmed", "picking"]))
+    .groupBy(orderLines.recipeId)
+    .all();
+
+  return demandByRecipe
+    .map((d) => {
+      // Available FG stock for this recipe
+      const fgResult = db
+        .select({
+          available:
+            sql<number>`coalesce(sum(${finishedGoodsStock.quantityOnHand} - ${finishedGoodsStock.quantityReserved}), 0)`,
+        })
+        .from(finishedGoodsStock)
+        .where(eq(finishedGoodsStock.recipeId, d.recipeId))
+        .get();
+
+      const available = fgResult?.available ?? 0;
+
+      // Batches planned or in-progress for this recipe
+      const activeBatches = db
+        .select({ id: brewBatches.id })
+        .from(brewBatches)
+        .where(
+          and(
+            eq(brewBatches.recipeId, d.recipeId),
+            inArray(brewBatches.status, [
+              "planned",
+              "brewing",
+              "fermenting",
+              "conditioning",
+              "ready_to_package",
+            ])
+          )
+        )
+        .all();
+
+      const unmetDemand = d.totalQuantity - available;
+      if (unmetDemand <= 0 && activeBatches.length > 0) return null;
+
+      // Suggest a latest brew date: delivery date minus ~21 days (3 weeks for fermentation + packaging)
+      let latestBrewDate: string | null = null;
+      if (d.earliestDelivery) {
+        const date = new Date(d.earliestDelivery);
+        date.setDate(date.getDate() - 21);
+        latestBrewDate = date.toISOString().split("T")[0];
+      }
+
+      return {
+        recipeId: d.recipeId,
+        recipeName: d.recipeName,
+        recipeStyle: d.recipeStyle,
+        demandQuantity: d.totalQuantity,
+        availableStock: available,
+        activeBatchCount: activeBatches.length,
+        earliestDelivery: d.earliestDelivery,
+        latestBrewDate,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+}
+
+// ── Purchase Timing ─────────────────────────────────
+// Shortfall items with required-by/order-by dates, grouped by supplier
+
+export function getPurchaseTiming() {
+  const materials = getMaterialsRequirements();
+  const shortfallItems = materials.filter((m) => m.shortfall > 0);
+
+  // For each shortfall item, find the earliest planned batch that needs it
+  const itemsWithTiming = shortfallItems.map((item) => {
+    const earliestBatch = db
+      .select({
+        plannedDate: brewBatches.plannedDate,
+        batchNumber: brewBatches.batchNumber,
+      })
+      .from(brewBatches)
+      .innerJoin(recipes, eq(brewBatches.recipeId, recipes.id))
+      .innerJoin(recipeIngredients, eq(recipeIngredients.recipeId, recipes.id))
+      .where(
+        and(
+          eq(recipeIngredients.inventoryItemId, item.inventoryItemId),
+          eq(brewBatches.status, "planned")
+        )
+      )
+      .orderBy(brewBatches.plannedDate)
+      .limit(1)
+      .get();
+
+    // Get supplier info for this item
+    const inventoryItem = db
+      .select({
+        supplierId: inventoryItems.supplierId,
+      })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, item.inventoryItemId))
+      .get();
+
+    let supplierInfo = null;
+    if (inventoryItem?.supplierId) {
+      supplierInfo = db
+        .select()
+        .from(suppliers)
+        .where(eq(suppliers.id, inventoryItem.supplierId))
+        .get();
+    }
+
+    const requiredBy = earliestBatch?.plannedDate ?? null;
+    let orderBy: string | null = null;
+    if (requiredBy && supplierInfo?.leadTimeDays) {
+      const requiredDate = new Date(requiredBy);
+      requiredDate.setDate(
+        requiredDate.getDate() - supplierInfo.leadTimeDays - 2
+      );
+      orderBy = requiredDate.toISOString().split("T")[0];
+    }
+
+    return {
+      ...item,
+      requiredBy,
+      orderBy,
+      batchNumber: earliestBatch?.batchNumber ?? null,
+      supplierId: supplierInfo?.id ?? null,
+      supplierName: supplierInfo?.name ?? null,
+      leadTimeDays: supplierInfo?.leadTimeDays ?? null,
+    };
+  });
+
+  // Pending deliveries (POs in transit)
+  const pendingDeliveries = db
+    .select({
+      id: purchaseOrders.id,
+      poNumber: purchaseOrders.poNumber,
+      status: purchaseOrders.status,
+      expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
+      supplierName: suppliers.name,
+      total: purchaseOrders.total,
+    })
+    .from(purchaseOrders)
+    .innerJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+    .where(
+      inArray(purchaseOrders.status, [
+        "sent",
+        "acknowledged",
+        "partially_received",
+      ])
+    )
+    .orderBy(purchaseOrders.expectedDeliveryDate)
+    .all();
+
+  return { itemsWithTiming, pendingDeliveries };
 }

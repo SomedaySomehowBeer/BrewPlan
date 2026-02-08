@@ -104,6 +104,55 @@ export const VesselStatus = {
 export type VesselStatus =
   (typeof VesselStatus)[keyof typeof VesselStatus];
 
+// Purchase order statuses
+export const PurchaseOrderStatus = {
+  DRAFT: "draft",
+  SENT: "sent",
+  ACKNOWLEDGED: "acknowledged",
+  PARTIALLY_RECEIVED: "partially_received",
+  RECEIVED: "received",
+  CANCELLED: "cancelled",
+} as const;
+export type PurchaseOrderStatus =
+  (typeof PurchaseOrderStatus)[keyof typeof PurchaseOrderStatus];
+
+// Customer types
+export const CustomerType = {
+  VENUE: "venue",
+  BOTTLE_SHOP: "bottle_shop",
+  DISTRIBUTOR: "distributor",
+  TAPROOM: "taproom",
+  MARKET: "market",
+  OTHER: "other",
+} as const;
+export type CustomerType =
+  (typeof CustomerType)[keyof typeof CustomerType];
+
+// Order statuses
+export const OrderStatus = {
+  DRAFT: "draft",
+  CONFIRMED: "confirmed",
+  PICKING: "picking",
+  DISPATCHED: "dispatched",
+  DELIVERED: "delivered",
+  INVOICED: "invoiced",
+  PAID: "paid",
+  CANCELLED: "cancelled",
+} as const;
+export type OrderStatus =
+  (typeof OrderStatus)[keyof typeof OrderStatus];
+
+// Order channels
+export const OrderChannel = {
+  WHOLESALE: "wholesale",
+  TAPROOM: "taproom",
+  ONLINE: "online",
+  MARKET: "market",
+  OTHER: "other",
+} as const;
+export type OrderChannel =
+  (typeof OrderChannel)[keyof typeof OrderChannel];
+
 // Valid batch transitions
 export const BATCH_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
   [BatchStatus.PLANNED]: [BatchStatus.BREWING, BatchStatus.CANCELLED],
@@ -118,4 +167,42 @@ export const BATCH_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
   [BatchStatus.COMPLETED]: [],
   [BatchStatus.CANCELLED]: [],
   [BatchStatus.DUMPED]: [],
+};
+
+// Valid PO transitions
+export const PO_TRANSITIONS: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  [PurchaseOrderStatus.DRAFT]: [PurchaseOrderStatus.SENT, PurchaseOrderStatus.CANCELLED],
+  [PurchaseOrderStatus.SENT]: [
+    PurchaseOrderStatus.ACKNOWLEDGED,
+    PurchaseOrderStatus.PARTIALLY_RECEIVED,
+    PurchaseOrderStatus.RECEIVED,
+    PurchaseOrderStatus.CANCELLED,
+  ],
+  [PurchaseOrderStatus.ACKNOWLEDGED]: [
+    PurchaseOrderStatus.PARTIALLY_RECEIVED,
+    PurchaseOrderStatus.RECEIVED,
+    PurchaseOrderStatus.CANCELLED,
+  ],
+  [PurchaseOrderStatus.PARTIALLY_RECEIVED]: [
+    PurchaseOrderStatus.RECEIVED,
+    PurchaseOrderStatus.CANCELLED,
+  ],
+  [PurchaseOrderStatus.RECEIVED]: [],
+  [PurchaseOrderStatus.CANCELLED]: [],
+};
+
+// Valid order transitions
+export const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  [OrderStatus.DRAFT]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+  [OrderStatus.CONFIRMED]: [
+    OrderStatus.PICKING,
+    OrderStatus.DISPATCHED,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.PICKING]: [OrderStatus.DISPATCHED],
+  [OrderStatus.DISPATCHED]: [OrderStatus.DELIVERED, OrderStatus.INVOICED],
+  [OrderStatus.DELIVERED]: [OrderStatus.INVOICED],
+  [OrderStatus.INVOICED]: [OrderStatus.PAID],
+  [OrderStatus.PAID]: [],
+  [OrderStatus.CANCELLED]: [],
 };

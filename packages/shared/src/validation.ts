@@ -204,3 +204,171 @@ export const createVesselSchema = z.object({
 export const updateVesselSchema = createVesselSchema.partial().extend({
   status: z.enum(vesselStatusValues).optional(),
 });
+
+// ── Packaging ────────────────────────────────────────
+
+const packageFormatValues = [
+  "keg_50l",
+  "keg_30l",
+  "keg_20l",
+  "can_375ml",
+  "can_355ml",
+  "bottle_330ml",
+  "bottle_500ml",
+  "other",
+] as const;
+
+export const createPackagingRunSchema = z.object({
+  brewBatchId: z.string().uuid(),
+  packagingDate: z.string().min(1, "Packaging date is required"),
+  format: z.enum(packageFormatValues),
+  formatCustom: z.string().max(100).nullable().optional(),
+  quantityUnits: z.coerce.number().int().positive("Quantity must be positive"),
+  volumeLitres: z.coerce.number().positive("Volume must be positive"),
+  bestBeforeDate: z.string().nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+});
+
+export const updateFinishedGoodsSchema = z.object({
+  unitPrice: z.coerce.number().nonnegative().nullable().optional(),
+  location: z.string().max(200).nullable().optional(),
+});
+
+// ── Suppliers ────────────────────────────────────────
+
+export const createSupplierSchema = z.object({
+  name: z.string().min(1, "Supplier name is required").max(200),
+  contactName: z.string().max(200).nullable().optional(),
+  email: z.string().email().nullable().optional().or(z.literal("")),
+  phone: z.string().max(50).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  website: z.string().max(200).nullable().optional(),
+  paymentTerms: z.string().max(100).nullable().optional(),
+  leadTimeDays: z.coerce.number().int().nonnegative().nullable().optional(),
+  minimumOrderValue: z.coerce.number().nonnegative().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const updateSupplierSchema = createSupplierSchema.partial();
+
+// ── Purchasing ───────────────────────────────────────
+
+const purchaseOrderStatusValues = [
+  "draft",
+  "sent",
+  "acknowledged",
+  "partially_received",
+  "received",
+  "cancelled",
+] as const;
+
+export const createPurchaseOrderSchema = z.object({
+  supplierId: z.string().uuid("Select a supplier"),
+  orderDate: z.string().nullable().optional(),
+  expectedDeliveryDate: z.string().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const updatePurchaseOrderSchema = z.object({
+  expectedDeliveryDate: z.string().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const purchaseOrderLineSchema = z.object({
+  inventoryItemId: z.string().uuid("Select an inventory item"),
+  quantityOrdered: z.coerce.number().positive("Quantity must be positive"),
+  unit: z.enum(unitValues),
+  unitCost: z.coerce.number().nonnegative("Unit cost must be non-negative"),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const poTransitionSchema = z.object({
+  toStatus: z.enum(purchaseOrderStatusValues),
+});
+
+export const receivePoLineSchema = z.object({
+  purchaseOrderLineId: z.string().uuid(),
+  quantityReceived: z.coerce.number().positive("Quantity must be positive"),
+  lotNumber: z.string().min(1, "Lot number is required").max(100),
+  location: z.string().max(200).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+// ── Customers ────────────────────────────────────────
+
+const customerTypeValues = [
+  "venue",
+  "bottle_shop",
+  "distributor",
+  "taproom",
+  "market",
+  "other",
+] as const;
+
+export const createCustomerSchema = z.object({
+  name: z.string().min(1, "Customer name is required").max(200),
+  customerType: z.enum(customerTypeValues),
+  contactName: z.string().max(200).nullable().optional(),
+  email: z.string().email().nullable().optional().or(z.literal("")),
+  phone: z.string().max(50).nullable().optional(),
+  addressLine1: z.string().max(200).nullable().optional(),
+  addressLine2: z.string().max(200).nullable().optional(),
+  city: z.string().max(100).nullable().optional(),
+  state: z.string().max(100).nullable().optional(),
+  postcode: z.string().max(20).nullable().optional(),
+  country: z.string().max(100).default("Australia"),
+  deliveryInstructions: z.string().max(1000).nullable().optional(),
+  paymentTerms: z.string().max(100).nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const updateCustomerSchema = createCustomerSchema.partial();
+
+// ── Orders ───────────────────────────────────────────
+
+const orderStatusValues = [
+  "draft",
+  "confirmed",
+  "picking",
+  "dispatched",
+  "delivered",
+  "invoiced",
+  "paid",
+  "cancelled",
+] as const;
+
+const orderChannelValues = [
+  "wholesale",
+  "taproom",
+  "online",
+  "market",
+  "other",
+] as const;
+
+export const createOrderSchema = z.object({
+  customerId: z.string().uuid("Select a customer"),
+  deliveryDate: z.string().nullable().optional(),
+  deliveryAddress: z.string().max(500).nullable().optional(),
+  channel: z.enum(orderChannelValues).default("wholesale"),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const updateOrderSchema = z.object({
+  deliveryDate: z.string().nullable().optional(),
+  deliveryAddress: z.string().max(500).nullable().optional(),
+  channel: z.enum(orderChannelValues).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export const orderLineSchema = z.object({
+  recipeId: z.string().uuid("Select a recipe"),
+  format: z.enum(packageFormatValues),
+  description: z.string().max(200).optional(),
+  quantity: z.coerce.number().int().positive("Quantity must be positive"),
+  unitPrice: z.coerce.number().nonnegative("Price must be non-negative"),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const orderTransitionSchema = z.object({
+  toStatus: z.enum(orderStatusValues),
+});

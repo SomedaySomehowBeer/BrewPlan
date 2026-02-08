@@ -9,3 +9,8 @@ export const BATCH_SIZE_MIN_LITRES = 1;
 export const BATCH_SIZE_MAX_LITRES = 10000;
 
 export const TOUCH_TARGET_MIN_PX = 44;
+
+export const PO_NUMBER_PREFIX = "PO";
+export const ORDER_NUMBER_PREFIX = "ORD";
+export const INVOICE_NUMBER_PREFIX = "INV";
+export const DEFAULT_TAX_RATE = 0.1;

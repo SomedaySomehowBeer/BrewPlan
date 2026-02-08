@@ -13,17 +13,18 @@ import {
 } from "~/components/ui/table";
 import { StatusBadge } from "~/components/shared/status-badge";
 import { formatDate } from "~/lib/utils";
-import { Calendar, Container } from "lucide-react";
+import { Calendar, Container, Lightbulb } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireUser(request);
 
   const schedule = queries.planning.getBrewSchedule();
-  return { schedule };
+  const suggestedBrews = queries.planning.getSuggestedBrews();
+  return { schedule, suggestedBrews };
 }
 
 export default function PlanningSchedule() {
-  const { schedule } = useLoaderData<typeof loader>();
+  const { schedule, suggestedBrews } = useLoaderData<typeof loader>();
 
   const plannedBatches = schedule.filter((b) => b.status === "planned");
   const inProgressBatches = schedule.filter((b) => b.status !== "planned");
@@ -282,6 +283,116 @@ export default function PlanningSchedule() {
             Create a new batch
           </Link>
         </div>
+      )}
+
+      {/* Suggested brews based on unmet demand */}
+      {suggestedBrews.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              Suggested Brews
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {/* Mobile cards */}
+            <div className="sm:hidden divide-y">
+              {suggestedBrews.map((s) => (
+                <div key={s.recipeId} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium text-sm">
+                        {s.recipeName}
+                      </span>
+                      {s.recipeStyle && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({s.recipeStyle})
+                        </span>
+                      )}
+                    </div>
+                    {s.activeBatchCount > 0 && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {s.activeBatchCount} in progress
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Demand: {s.demandQuantity} units</span>
+                    <span>Stock: {s.availableStock} available</span>
+                    {s.latestBrewDate && (
+                      <span>Brew by: {formatDate(s.latestBrewDate)}</span>
+                    )}
+                    {s.earliestDelivery && (
+                      <span>
+                        Delivery: {formatDate(s.earliestDelivery)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Recipe</TableHead>
+                    <TableHead className="text-right">Demand</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="text-right">Active Batches</TableHead>
+                    <TableHead>Earliest Delivery</TableHead>
+                    <TableHead>Latest Brew Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {suggestedBrews.map((s) => (
+                    <TableRow key={s.recipeId}>
+                      <TableCell>
+                        <Link
+                          to={`/recipes/${s.recipeId}`}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {s.recipeName}
+                        </Link>
+                        {s.recipeStyle && (
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ({s.recipeStyle})
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {s.demandQuantity}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">
+                        {s.availableStock}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {s.activeBatchCount > 0 ? (
+                          s.activeBatchCount
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">
+                            None
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {s.earliestDelivery
+                          ? formatDate(s.earliestDelivery)
+                          : "—"}
+                      </TableCell>
+                      <TableCell>
+                        {s.latestBrewDate
+                          ? formatDate(s.latestBrewDate)
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

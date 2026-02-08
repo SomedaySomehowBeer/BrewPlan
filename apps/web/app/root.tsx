@@ -17,18 +17,48 @@ import {
   Menu,
   X,
   LogOut,
+  Boxes,
+  Users,
+  ShoppingCart,
+  Truck,
+  FileText,
 } from "lucide-react";
 import { useState } from "react";
 import "~/app.css";
 
 export const links: LinksFunction = () => [];
 
-const navItems = [
-  { to: "/recipes", label: "Recipes", icon: ClipboardList },
-  { to: "/inventory", label: "Inventory", icon: Package },
-  { to: "/batches", label: "Batches", icon: Beer },
-  { to: "/vessels", label: "Vessels", icon: Container },
-  { to: "/planning", label: "Planning", icon: BarChart3 },
+const navGroups = [
+  {
+    label: "Brewing",
+    items: [
+      { to: "/recipes", label: "Recipes", icon: ClipboardList },
+      { to: "/batches", label: "Batches", icon: Beer },
+      { to: "/vessels", label: "Vessels", icon: Container },
+    ],
+  },
+  {
+    label: "Inventory",
+    items: [
+      { to: "/inventory", label: "Raw Materials", icon: Package },
+      { to: "/stock", label: "Finished Goods", icon: Boxes },
+    ],
+  },
+  {
+    label: "Commercial",
+    items: [
+      { to: "/customers", label: "Customers", icon: Users },
+      { to: "/orders", label: "Orders", icon: ShoppingCart },
+      { to: "/suppliers", label: "Suppliers", icon: Truck },
+      { to: "/purchasing", label: "Purchasing", icon: FileText },
+    ],
+  },
+  {
+    label: "Planning",
+    items: [
+      { to: "/planning", label: "Planning", icon: BarChart3 },
+    ],
+  },
 ];
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -45,23 +75,32 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </button>
         )}
       </div>
-      <nav className="flex-1 space-y-1 p-3">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-md px-3 min-h-[44px] text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              }`
-            }
-          >
-            <item.icon className="h-5 w-5" />
-            {item.label}
-          </NavLink>
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+        {navGroups.map((group) => (
+          <div key={group.label}>
+            <p className="px-3 mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">
+              {group.label}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={onClose}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 min-h-[44px] text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`
+                  }
+                >
+                  <item.icon className="h-5 w-5" />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
       <div className="border-t border-border p-3">

@@ -16,7 +16,7 @@ import { StatusBadge } from "~/components/shared/status-badge";
 import { UnitDisplay } from "~/components/shared/unit-display";
 import { Button } from "~/components/ui/button";
 import { formatDate, formatNumber } from "~/lib/utils";
-import { Beaker, Thermometer, FlaskConical, Plus } from "lucide-react";
+import { Beaker, Thermometer, FlaskConical, Plus, Package } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
@@ -48,6 +48,16 @@ export default function BatchDetail() {
           Log Fermentation Reading
         </Button>
       </Link>
+
+      {/* Packaging link - show when ready_to_package or later */}
+      {["ready_to_package", "packaged", "completed"].includes(batch.status) && (
+        <Link to={`/batches/${batch.id}/packaging`}>
+          <Button variant="outline" size="lg" className="w-full min-h-[56px] text-base">
+            <Package className="mr-2 h-5 w-5" />
+            Packaging Runs
+          </Button>
+        </Link>
+      )}
 
       {/* Measurements & Recipe Info */}
       <div className="grid gap-4 sm:grid-cols-2">
