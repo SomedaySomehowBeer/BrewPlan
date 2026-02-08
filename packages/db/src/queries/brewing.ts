@@ -11,6 +11,7 @@ import {
   vessels,
 } from "../schema/index";
 import { BATCH_TRANSITIONS, type BatchStatus } from "@brewplan/shared";
+import { recordMovement } from "./inventory";
 
 // ── List ─────────────────────────────────────────────
 
@@ -243,6 +244,60 @@ export function transition(id: string, toStatus: BatchStatus) {
     );
   }
 
+  // ── Transition guards ──────────────────────────────
+  if (currentStatus === "planned" && toStatus === "brewing") {
+    const recipe = db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, batch.recipeId))
+      .get();
+    if (!recipe || recipe.status !== "active") {
+      throw new Error("Recipe must be active before brewing can start");
+    }
+    if (!batch.vesselId) {
+      throw new Error("A vessel must be assigned before brewing can start");
+    }
+    const vessel = db
+      .select()
+      .from(vessels)
+      .where(eq(vessels.id, batch.vesselId))
+      .get();
+    if (!vessel || vessel.status !== "available") {
+      throw new Error("Assigned vessel must be available before brewing can start");
+    }
+  }
+
+  if (currentStatus === "brewing" && toStatus === "fermenting") {
+    if (batch.actualOg == null) {
+      throw new Error("Actual OG must be recorded before moving to fermentation");
+    }
+    const consumptions = db
+      .select()
+      .from(brewIngredientConsumptions)
+      .where(eq(brewIngredientConsumptions.brewBatchId, id))
+      .all();
+    if (consumptions.length === 0) {
+      throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
+    }
+  }
+
+  if (currentStatus === "fermenting" && toStatus === "conditioning") {
+    const logEntries = db
+      .select()
+      .from(fermentationLogEntries)
+      .where(eq(fermentationLogEntries.brewBatchId, id))
+      .all();
+    if (logEntries.length === 0) {
+      throw new Error("At least one fermentation log entry must be recorded before conditioning");
+    }
+  }
+
+  if (currentStatus === "conditioning" && toStatus === "ready_to_package") {
+    if (batch.actualFg == null) {
+      throw new Error("Actual FG must be recorded before marking ready to package");
+    }
+  }
+
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = {
     status: toStatus,
@@ -266,6 +321,25 @@ export function transition(id: string, toStatus: BatchStatus) {
     }
   }
 
+  if (currentStatus === "brewing" && toStatus === "fermenting") {
+    // Record stock movements for all ingredient consumptions
+    const consumptions = db
+      .select()
+      .from(brewIngredientConsumptions)
+      .where(eq(brewIngredientConsumptions.brewBatchId, id))
+      .all();
+    for (const c of consumptions) {
+      recordMovement({
+        inventoryLotId: c.inventoryLotId,
+        movementType: "consumed",
+        quantity: -c.actualQuantity,
+        referenceType: "brew_batch",
+        referenceId: id,
+        reason: `Consumed in batch ${batch.batchNumber ?? id}`,
+      });
+    }
+  }
+
   if (toStatus === "ready_to_package") {
     // Calculate ABV from OG and FG if both are present
     if (batch.actualOg && batch.actualFg) {
@@ -279,7 +353,7 @@ export function transition(id: string, toStatus: BatchStatus) {
   }
 
   // Release vessel on dump or completion-related transitions
-  if (toStatus === "dumped" || toStatus === "cancelled") {
+  if (toStatus === "dumped" || toStatus === "cancelled" || toStatus === "packaged") {
     if (batch.vesselId) {
       db.update(vessels)
         .set({

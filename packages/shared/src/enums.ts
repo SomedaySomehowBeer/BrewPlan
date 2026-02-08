@@ -113,7 +113,7 @@ export const BATCH_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
     BatchStatus.READY_TO_PACKAGE,
     BatchStatus.DUMPED,
   ],
-  [BatchStatus.READY_TO_PACKAGE]: [BatchStatus.DUMPED],
+  [BatchStatus.READY_TO_PACKAGE]: [BatchStatus.PACKAGED, BatchStatus.DUMPED],
   [BatchStatus.PACKAGED]: [BatchStatus.COMPLETED],
   [BatchStatus.COMPLETED]: [],
   [BatchStatus.CANCELLED]: [],

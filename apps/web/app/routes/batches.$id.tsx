@@ -1,4 +1,4 @@
-import { Outlet, useLoaderData, Form, Link, redirect } from "react-router";
+import { Outlet, useLoaderData, Form, Link, redirect, useSearchParams } from "react-router";
 import type { Route } from "./+types/batches.$id";
 import { requireUser } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
@@ -16,6 +16,8 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  AlertCircle,
+  X,
 } from "lucide-react";
 
 const transitionMeta: Record<
@@ -56,6 +58,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export default function BatchDetailLayout() {
   const { batch, allowedTransitions } = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const error = searchParams.get("error");
+
+  function dismissError() {
+    setSearchParams((prev) => {
+      prev.delete("error");
+      return prev;
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -67,6 +78,20 @@ export default function BatchDetailLayout() {
         <ArrowLeft className="h-4 w-4" />
         All Batches
       </Link>
+
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <p className="flex-1 text-sm font-medium">{error}</p>
+          <button
+            onClick={dismissError}
+            className="shrink-0 rounded-sm p-1 hover:bg-destructive/20 min-h-[44px] min-w-[44px] flex items-center justify-center"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Batch Header */}
       <Card>

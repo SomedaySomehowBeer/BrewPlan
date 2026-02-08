@@ -31,7 +31,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const result = createRecipeSchema.safeParse(cleaned);
   if (!result.success) {
-    return { errors: result.error.flatten().fieldErrors };
+    return { errors: result.error.flatten().fieldErrors, values: cleaned };
   }
 
   const recipe = queries.recipes.create(result.data);
@@ -41,6 +41,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function NewRecipe() {
   const actionData = useActionData<typeof action>();
   const errors = actionData?.errors;
+  const values = actionData?.values as Record<string, string | null> | undefined;
 
   return (
     <div className="space-y-4">
@@ -56,6 +57,11 @@ export default function NewRecipe() {
           <CardTitle>New Recipe</CardTitle>
         </CardHeader>
         <CardContent>
+          {errors && (
+            <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+              Please fix the errors below and try again.
+            </div>
+          )}
           <Form method="post" className="space-y-6">
             {/* Basic Info */}
             <div className="space-y-4">
@@ -64,14 +70,14 @@ export default function NewRecipe() {
               </h3>
               <div className="space-y-2">
                 <Label htmlFor="name">Recipe Name</Label>
-                <Input id="name" name="name" required />
+                <Input id="name" name="name" required defaultValue={values?.name ?? ""} />
                 {errors?.name && (
                   <p className="text-sm text-destructive">{errors.name[0]}</p>
                 )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="style">Style</Label>
-                <Input id="style" name="style" required placeholder="e.g. Pale Ale, IPA, Stout" />
+                <Input id="style" name="style" required placeholder="e.g. Pale Ale, IPA, Stout" defaultValue={values?.style ?? ""} />
                 {errors?.style && (
                   <p className="text-sm text-destructive">{errors.style[0]}</p>
                 )}
@@ -82,6 +88,7 @@ export default function NewRecipe() {
                   id="description"
                   name="description"
                   placeholder="Optional recipe description"
+                  defaultValue={values?.description ?? ""}
                 />
                 {errors?.description && (
                   <p className="text-sm text-destructive">{errors.description[0]}</p>
@@ -103,6 +110,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.1"
                     required
+                    defaultValue={values?.batchSizeLitres ?? ""}
                   />
                   {errors?.batchSizeLitres && (
                     <p className="text-sm text-destructive">
@@ -116,7 +124,7 @@ export default function NewRecipe() {
                     id="boilDurationMinutes"
                     name="boilDurationMinutes"
                     type="number"
-                    defaultValue={60}
+                    defaultValue={values?.boilDurationMinutes ?? 60}
                   />
                   {errors?.boilDurationMinutes && (
                     <p className="text-sm text-destructive">
@@ -132,6 +140,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.1"
                     placeholder="e.g. 65"
+                    defaultValue={values?.mashTempCelsius ?? ""}
                   />
                   {errors?.mashTempCelsius && (
                     <p className="text-sm text-destructive">
@@ -156,6 +165,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.001"
                     placeholder="e.g. 1.050"
+                    defaultValue={values?.targetOg ?? ""}
                   />
                   {errors?.targetOg && (
                     <p className="text-sm text-destructive">{errors.targetOg[0]}</p>
@@ -169,6 +179,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.001"
                     placeholder="e.g. 1.010"
+                    defaultValue={values?.targetFg ?? ""}
                   />
                   {errors?.targetFg && (
                     <p className="text-sm text-destructive">{errors.targetFg[0]}</p>
@@ -182,6 +193,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.1"
                     placeholder="e.g. 5.2"
+                    defaultValue={values?.targetAbv ?? ""}
                   />
                   {errors?.targetAbv && (
                     <p className="text-sm text-destructive">{errors.targetAbv[0]}</p>
@@ -195,6 +207,7 @@ export default function NewRecipe() {
                     type="number"
                     step="1"
                     placeholder="e.g. 35"
+                    defaultValue={values?.targetIbu ?? ""}
                   />
                   {errors?.targetIbu && (
                     <p className="text-sm text-destructive">{errors.targetIbu[0]}</p>
@@ -208,6 +221,7 @@ export default function NewRecipe() {
                     type="number"
                     step="0.1"
                     placeholder="e.g. 6"
+                    defaultValue={values?.targetSrm ?? ""}
                   />
                   {errors?.targetSrm && (
                     <p className="text-sm text-destructive">{errors.targetSrm[0]}</p>
@@ -228,7 +242,7 @@ export default function NewRecipe() {
                     id="estimatedBrewDays"
                     name="estimatedBrewDays"
                     type="number"
-                    defaultValue={1}
+                    defaultValue={values?.estimatedBrewDays ?? 1}
                   />
                   {errors?.estimatedBrewDays && (
                     <p className="text-sm text-destructive">
@@ -244,7 +258,7 @@ export default function NewRecipe() {
                     id="estimatedFermentationDays"
                     name="estimatedFermentationDays"
                     type="number"
-                    defaultValue={14}
+                    defaultValue={values?.estimatedFermentationDays ?? 14}
                   />
                   {errors?.estimatedFermentationDays && (
                     <p className="text-sm text-destructive">
@@ -260,7 +274,7 @@ export default function NewRecipe() {
                     id="estimatedConditioningDays"
                     name="estimatedConditioningDays"
                     type="number"
-                    defaultValue={7}
+                    defaultValue={values?.estimatedConditioningDays ?? 7}
                   />
                   {errors?.estimatedConditioningDays && (
                     <p className="text-sm text-destructive">

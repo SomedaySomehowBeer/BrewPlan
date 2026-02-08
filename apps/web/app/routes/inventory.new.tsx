@@ -41,7 +41,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   const result = createInventoryItemSchema.safeParse(cleaned);
   if (!result.success) {
-    return { errors: result.error.flatten().fieldErrors };
+    return { errors: result.error.flatten().fieldErrors, values: cleaned };
   }
 
   const item = queries.inventory.create(result.data);
@@ -51,6 +51,7 @@ export async function action({ request }: Route.ActionArgs) {
 export default function NewInventoryItem() {
   const actionData = useActionData<typeof action>();
   const errors = actionData?.errors;
+  const values = actionData?.values as Record<string, string | null> | undefined;
 
   return (
     <div className="space-y-4">
@@ -66,6 +67,11 @@ export default function NewInventoryItem() {
           <CardTitle>New Inventory Item</CardTitle>
         </CardHeader>
         <CardContent>
+          {errors && (
+            <div className="mb-6 rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+              Please fix the errors below and try again.
+            </div>
+          )}
           <Form method="post" className="space-y-6">
             {/* Basic Info */}
             <div className="space-y-4">
@@ -74,7 +80,7 @@ export default function NewInventoryItem() {
               </h3>
               <div className="space-y-2">
                 <Label htmlFor="name">Item Name</Label>
-                <Input id="name" name="name" required />
+                <Input id="name" name="name" required defaultValue={values?.name ?? ""} />
                 {errors?.name && (
                   <p className="text-sm text-destructive">{errors.name[0]}</p>
                 )}
@@ -85,6 +91,7 @@ export default function NewInventoryItem() {
                   id="sku"
                   name="sku"
                   placeholder="Optional SKU or product code"
+                  defaultValue={values?.sku ?? ""}
                 />
                 {errors?.sku && (
                   <p className="text-sm text-destructive">{errors.sku[0]}</p>
@@ -93,7 +100,7 @@ export default function NewInventoryItem() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Select name="category" defaultValue="grain">
+                  <Select name="category" defaultValue={values?.category ?? "grain"}>
                     <SelectTrigger id="category">
                       <SelectValue />
                     </SelectTrigger>
@@ -122,6 +129,7 @@ export default function NewInventoryItem() {
                     id="subcategory"
                     name="subcategory"
                     placeholder="e.g. Base Malt"
+                    defaultValue={values?.subcategory ?? ""}
                   />
                   {errors?.subcategory && (
                     <p className="text-sm text-destructive">
@@ -140,7 +148,7 @@ export default function NewInventoryItem() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="unit">Unit</Label>
-                  <Select name="unit" defaultValue="kg">
+                  <Select name="unit" defaultValue={values?.unit ?? "kg"}>
                     <SelectTrigger id="unit">
                       <SelectValue />
                     </SelectTrigger>
@@ -163,7 +171,7 @@ export default function NewInventoryItem() {
                     name="unitCost"
                     type="number"
                     step="0.01"
-                    defaultValue={0}
+                    defaultValue={values?.unitCost ?? 0}
                   />
                   {errors?.unitCost && (
                     <p className="text-sm text-destructive">
@@ -188,6 +196,7 @@ export default function NewInventoryItem() {
                     type="number"
                     step="0.1"
                     placeholder="Trigger reorder below"
+                    defaultValue={values?.reorderPoint ?? ""}
                   />
                   {errors?.reorderPoint && (
                     <p className="text-sm text-destructive">
@@ -203,6 +212,7 @@ export default function NewInventoryItem() {
                     type="number"
                     step="0.1"
                     placeholder="Standard order size"
+                    defaultValue={values?.reorderQty ?? ""}
                   />
                   {errors?.reorderQty && (
                     <p className="text-sm text-destructive">
@@ -223,7 +233,7 @@ export default function NewInventoryItem() {
                   type="checkbox"
                   id="isGlutenFree"
                   name="isGlutenFree"
-                  defaultChecked
+                  defaultChecked={values?.isGlutenFree !== "false"}
                   className="h-5 w-5 rounded border-input"
                 />
                 <Label htmlFor="isGlutenFree">Gluten Free</Label>
@@ -234,6 +244,7 @@ export default function NewInventoryItem() {
                   id="countryOfOrigin"
                   name="countryOfOrigin"
                   placeholder="e.g. Australia"
+                  defaultValue={values?.countryOfOrigin ?? ""}
                 />
                 {errors?.countryOfOrigin && (
                   <p className="text-sm text-destructive">
@@ -243,7 +254,7 @@ export default function NewInventoryItem() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" name="notes" placeholder="Optional notes" />
+                <Textarea id="notes" name="notes" placeholder="Optional notes" defaultValue={values?.notes ?? ""} />
                 {errors?.notes && (
                   <p className="text-sm text-destructive">{errors.notes[0]}</p>
                 )}
