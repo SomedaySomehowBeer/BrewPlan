@@ -19,6 +19,7 @@ Brewery management app for Someday Somehow Brewing (gluten-free brewery, Vasse W
 - `packages/shared/` — Enums, TypeScript interfaces, Zod schemas. Shared contract.
 - `packages/db/` — Drizzle schema, query functions, migrations, seed.
 - `apps/web/` — Remix app. Routes split by domain module.
+- `apps/web/e2e/` — Playwright E2E tests. 12 spec files, 38 tests.
 
 ## Conventions
 
@@ -30,19 +31,14 @@ Brewery management app for Someday Somehow Brewing (gluten-free brewery, Vasse W
 - Route files contain: loader, action (if mutations), default export (UI component).
 - Mobile-first: design for 640px, enhance for 1024px+. Tables become cards on small screens.
 - Batch numbers: `BP-{year}-{sequence}` (e.g. BP-2026-001).
+- PO numbers: `PO-{year}-{sequence}` (e.g. PO-2026-001).
+- Order numbers: `ORD-{year}-{sequence}` (e.g. ORD-2026-001).
 
 ## Agent Boundaries
 
-If you are working as a sub-agent, check which files you own:
+The Phase 1 build used a parallel agent strategy (Agent 0–3 split by domain module). Phase 2 and onward are built by a single developer — agent boundaries are no longer enforced. All files are fair game.
 
-| Agent | Owns | Don't Touch |
-|-------|------|-------------|
-| Agent 0 | `packages/shared/**` | Everything else |
-| Agent 1 | `packages/db/**` | Routes, components |
-| Agent 2 | `apps/web/app/routes/recipes.*`, `apps/web/app/routes/inventory.*` | Other routes |
-| Agent 3 | `apps/web/app/routes/batches.*`, `apps/web/app/routes/vessels.*`, `apps/web/app/routes/planning.*` | Other routes |
-
-Shared components in `apps/web/app/components/` are set up during scaffolding. If you need a new shared component, create it in your route directory first.
+If you are a sub-agent, coordinate with the lead on which files you own for the current task.
 
 ## Commands
 
@@ -53,4 +49,6 @@ pnpm build            # Build all packages + app
 pnpm db:generate      # Generate Drizzle migrations
 pnpm db:migrate       # Run migrations
 pnpm db:seed          # Seed dev data
+pnpm test:e2e         # Run Playwright E2E tests (headless)
+pnpm test:e2e -- --ui # Open Playwright UI mode
 ```

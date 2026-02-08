@@ -353,12 +353,12 @@ With all guards and side effects per DOMAIN.md. `ready_to_package` is effectivel
 - `quantity_on_order` — returns 0 in Phase 1 (no purchase orders yet), but the query exists
 - Materials requirements — for all planned batches, ingredients needed vs available
 
-### Not in Phase 1
+### Not in Phase 1 (implemented in Phase 2)
 
-- Packaging, finished goods, orders, customers, purchasing, suppliers
-- Quality checks, settings, recipe versioning, file uploads
-- Multi-user / roles (auth is in, but single user only)
-- Brewfather import
+- ~~Packaging, finished goods, orders, customers, purchasing, suppliers~~ → Phase 2
+- Quality checks, settings, recipe versioning, file uploads → Phase 3
+- Multi-user / roles (auth is in, but single user only) → Phase 3
+- Brewfather import → Phase 3
 
 ---
 
@@ -491,6 +491,166 @@ Single container:
 1. Litestream (background — continuous WAL streaming)
 2. Drizzle migrations (on startup)
 3. Remix server (serves everything — SSR pages + static assets)
+
+---
+
+## Phase 2 — Commercial Operations + Full Planning
+
+> Phase 2 = Packaging, suppliers, purchasing, customers, orders, and demand-driven planning views.
+> Completed and committed. All Phase 2 entities, routes, schemas, and queries are implemented.
+
+### Phase 2 Entities
+
+7 new database tables (schema files in `packages/db/src/schema/`):
+
+| Table | Schema File | Notes |
+|-------|-------------|-------|
+| `Supplier` | `suppliers.ts` | Maltsters, hop merchants, yeast labs, packaging suppliers |
+| `PurchaseOrder` | `purchasing.ts` | POs with state machine (draft → sent → acknowledged → partially_received → received) |
+| `PurchaseOrderLine` | `purchasing.ts` | Line items on POs, tracks quantity_ordered vs quantity_received |
+| `Customer` | `customers.ts` | Venues, bottle shops, distributors, taproom |
+| `Order` | `orders.ts` | Orders with state machine (draft → confirmed → picking → dispatched → delivered → invoiced → paid) |
+| `OrderLine` | `orders.ts` | Forward order support: recipe_id + format, finished_goods_id linked at picking |
+| `PackagingRun` | `packaging.ts` | Keg/can/bottle runs from fermented batches |
+| `FinishedGoodsStock` | `packaging.ts` | Packaged beer available for sale |
+
+### Phase 2 Query Files
+
+5 new query modules in `packages/db/src/queries/`:
+
+- `packaging.ts` — packaging runs, finished goods stock CRUD
+- `suppliers.ts` — supplier CRUD
+- `purchasing.ts` — PO lifecycle, line management, receiving flow with lot creation
+- `customers.ts` — customer CRUD
+- `orders.ts` — order lifecycle, line management, stock picking/reservation
+
+### Phase 2 Route Map
+
+35 new route files in `apps/web/app/routes/`:
+
+**Suppliers** (6 routes):
+- `suppliers.tsx` — layout
+- `suppliers._index.tsx` — list
+- `suppliers.new.tsx` — create
+- `suppliers.$id.tsx` — detail layout
+- `suppliers.$id._index.tsx` — detail view
+- `suppliers.$id.edit.tsx` — edit
+
+**Purchasing** (8 routes):
+- `purchasing.tsx` — layout
+- `purchasing._index.tsx` — PO list
+- `purchasing.new.tsx` — create PO
+- `purchasing.$id.tsx` — PO detail layout
+- `purchasing.$id._index.tsx` — PO detail view
+- `purchasing.$id.lines.tsx` — manage PO lines
+- `purchasing.$id.transition.tsx` — PO status transitions
+- `purchasing.$id.receive.tsx` — receive goods against PO
+
+**Customers** (6 routes):
+- `customers.tsx` — layout
+- `customers._index.tsx` — list
+- `customers.new.tsx` — create
+- `customers.$id.tsx` — detail layout
+- `customers.$id._index.tsx` — detail view
+- `customers.$id.edit.tsx` — edit
+
+**Orders** (8 routes):
+- `orders.tsx` — layout
+- `orders._index.tsx` — order list
+- `orders.new.tsx` — create order
+- `orders.$id.tsx` — order detail layout
+- `orders.$id._index.tsx` — order detail view
+- `orders.$id.lines.tsx` — manage order lines
+- `orders.$id.transition.tsx` — order status transitions
+- `orders.$id.pick.tsx` — pick/allocate finished goods to order lines
+
+**Finished Goods Stock** (3 routes):
+- `stock.tsx` — layout
+- `stock._index.tsx` — stock list
+- `stock.$id.tsx` — stock detail
+
+**Batch Packaging** (1 route):
+- `batches.$id.packaging.tsx` — create packaging runs from a batch
+
+**Planning** (3 new routes):
+- `planning.demand.tsx` — demand view: what orders are due, unfulfillable orders
+- `planning.packaging.tsx` — packaging priority: what to keg/can first
+- `planning.purchasing.tsx` — purchase timing: what to order and when
+
+### Phase 2 State Machines
+
+Two new state machines added (per DOMAIN.md):
+
+- **Order**: `draft` → `confirmed` → `picking` → `dispatched` → `delivered` → `invoiced` → `paid` (with cancellation from draft/confirmed)
+- **Purchase Order**: `draft` → `sent` → `acknowledged` → `partially_received` → `received` (with cancellation from any pre-received state)
+
+Both include guards, side effects, and shortcut transitions as defined in DOMAIN.md.
+
+---
+
+## E2E Testing
+
+Playwright E2E test suite covering all modules across both phases.
+
+### Setup
+
+- **Framework:** Playwright (`@playwright/test`)
+- **Config:** `apps/web/e2e/playwright.config.ts`
+- **Global setup/teardown:** `e2e/global-setup.ts` / `e2e/global-teardown.ts` — seeds a test database, authenticates a test user
+- **Auth helper:** `e2e/helpers/auth.ts` — shared auth storage at `e2e/.auth/user.json`
+- **Test database:** Isolated SQLite DB at `e2e/brewplan-test.db`
+- **Browser:** Chromium only, sequential execution (`workers: 1`, `fullyParallel: false`)
+- **Web server:** Auto-starts dev server on port 5173
+
+### Running Tests
+
+```bash
+pnpm test:e2e             # Run all E2E tests (headless)
+pnpm test:e2e -- --ui     # Open Playwright UI mode
+pnpm test:e2e:headed      # Run tests with visible browser
+```
+
+### Test Files
+
+12 spec files, 38 tests total in `apps/web/e2e/tests/`:
+
+| Spec File | Module |
+|-----------|--------|
+| `auth.spec.ts` | Login/logout |
+| `dashboard.spec.ts` | Home dashboard |
+| `recipes.spec.ts` | Recipe CRUD + ingredients |
+| `inventory.spec.ts` | Inventory items, lots, movements |
+| `batches.spec.ts` | Batch lifecycle + transitions |
+| `vessels.spec.ts` | Vessel CRUD |
+| `planning.spec.ts` | Planning views |
+| `suppliers.spec.ts` | Supplier CRUD |
+| `purchasing.spec.ts` | Purchase orders + receiving |
+| `customers.spec.ts` | Customer CRUD |
+| `orders.spec.ts` | Order lifecycle + picking |
+| `stock.spec.ts` | Finished goods stock |
+
+---
+
+## Current State
+
+### Completed
+
+- **Phase 1** (Core Brewing Loop): Auth, recipes, inventory, brew batches, vessels, materials planning. All implemented and tested.
+- **Phase 2** (Commercial Operations): Packaging, suppliers, purchasing, customers, orders, demand/packaging/purchasing planning views. All implemented and tested.
+- **E2E Tests**: 38 tests across 12 spec files covering all modules.
+
+### Phase 3 — Future
+
+From DOMAIN.md, the following remain unimplemented:
+
+- **Quality Checks** — QC checkpoints (pH, DO, micro, sensory) attached to brew batches
+- **Settings** — Brewery profile, units, currency, tax config
+- **Recipe Versioning** — Clone + parent_recipe_id chain
+- **Recipe Process Steps** — Documenting process beyond ingredients
+- **Brewfather Import** — JSON export → Recipe + RecipeIngredient mapping
+- **Reporting & Export** — CSV, invoice PDFs
+- **Production Summary** — Historical analytics (Planning view 9.6)
+- **Multi-user / Roles** — Registration, password reset, role-based access
 
 ---
 

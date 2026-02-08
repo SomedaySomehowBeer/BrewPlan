@@ -88,7 +88,7 @@ Each ingredient is assigned to a **usage stage** — this is the key brewing-spe
 - `estimated_cost` — sum of (quantity × inventory_item.unit_cost) across all ingredients
 - `cost_per_litre` — estimated_cost ÷ batch_size_litres
 
-### Recipe Process Step *(optional — Phase 2+)*
+### Recipe Process Step *(optional — Phase 3+)*
 
 For breweries that want to document their process beyond just ingredients.
 
@@ -563,7 +563,7 @@ Historical performance, not planning — but useful context.
 
 ---
 
-## 10. Quality *(Phase 2+)*
+## 10. Quality *(Phase 3+)*
 
 QC checkpoints attached to brew batches at various stages.
 
@@ -784,29 +784,31 @@ Only `cleaning`, `maintenance`, and `out_of_service` are manually controlled. `i
 
 ## Implementation Priority
 
-### Phase 1 — Core Brewing Loop (MVP)
-1. **Auth** — User table, cookie sessions, login/logout. Single user, seeded.
-2. **Recipes** + Recipe Ingredients (the BOM) — including time estimates
-3. **Inventory Items** + Lots + Stock Movements — including derived position calculations
-4. **Brew Batches** + Ingredient Consumption + Fermentation Log
-5. **Vessels** (basic — just tracking what's where)
-6. **Planning: Materials Requirements** (9.4) — even with just recipes and inventory, you can answer "do I have enough to brew this?"
+### Phase 1 — Core Brewing Loop (MVP) ✅
+1. ✅ **Auth** — User table, cookie sessions, login/logout. Single user, seeded.
+2. ✅ **Recipes** + Recipe Ingredients (the BOM) — including time estimates
+3. ✅ **Inventory Items** + Lots + Stock Movements — including derived position calculations
+4. ✅ **Brew Batches** + Ingredient Consumption + Fermentation Log
+5. ✅ **Vessels** (basic — just tracking what's where)
+6. ✅ **Planning: Materials Requirements** (9.4) — even with just recipes and inventory, you can answer "do I have enough to brew this?"
 
 Phase 1 constraints: metric only (no imperial), batch numbering `{prefix}-{year}-{sequence}`, mobile-first UI (44px touch targets).
 
-### Phase 2 — Commercial Operations + Full Planning
-6. **Packaging Runs** + Finished Goods Stock
-7. **Customers** + **Orders** + Order Lines (with forward order support)
-8. **Suppliers** + **Purchase Orders** + Receiving flow (with lead times)
-9. **Planning: Full chain** — Demand (9.1) → Packaging Priority (9.2) → Brew Schedule (9.3) → Purchase Timing (9.5)
+### Phase 2 — Commercial Operations + Full Planning ✅
+6. ✅ **Packaging Runs** + Finished Goods Stock
+7. ✅ **Customers** + **Orders** + Order Lines (with forward order support)
+8. ✅ **Suppliers** + **Purchase Orders** + Receiving flow (with lead times)
+9. ✅ **Planning: Full chain** — Demand (9.1) → Packaging Priority (9.2) → Brew Schedule (9.3) → Purchase Timing (9.5)
 
 ### Phase 3 — Polish & Compliance
 10. **Quality Checks**
 11. **Settings** / Brewery Profile
 12. **Recipe Versioning** (clone + parent_recipe_id chain)
-13. **Brewfather Import** — JSON export → Recipe + RecipeIngredient mapping
-14. Reporting & export (CSV, invoices PDF)
-15. **Planning: Production Summary** (9.6) — historical analytics
+13. **Recipe Process Steps** — detailed process documentation beyond ingredients
+14. **Brewfather Import** — JSON export → Recipe + RecipeIngredient mapping
+15. Reporting & export (CSV, invoices PDF)
+16. **Planning: Production Summary** (9.6) — historical analytics
+17. **Multi-user / Roles** — registration, password reset, role-based access
 
 ---
 
