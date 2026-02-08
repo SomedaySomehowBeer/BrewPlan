@@ -7,7 +7,10 @@
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "test:e2e:ui": "playwright test --config=e2e/playwright.config.ts --ui",
+    "test:e2e:headed": "playwright test --config=e2e/playwright.config.ts --headed"
   },
   "dependencies": {
     "@brewplan/db": "workspace:*",
@@ -31,6 +34,7 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@react-router/dev": "^7.1.0",
     "@react-router/serve": "^7.1.0",
     "@tailwindcss/vite": "^4.0.0",

@@ -9,3 +9,6 @@ build/
 .turbo
 .cache
 .DS_Store
+test-results/
+playwright-report/
+.auth/

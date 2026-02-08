@@ -8,7 +8,8 @@
     "typecheck": "turbo typecheck",
     "db:generate": "pnpm --filter @brewplan/db db:generate",
     "db:migrate": "pnpm --filter @brewplan/db db:migrate",
-    "db:seed": "pnpm --filter @brewplan/db db:seed"
+    "db:seed": "pnpm --filter @brewplan/db db:seed",
+    "test:e2e": "pnpm --filter @brewplan/web test:e2e"
   },
   "devDependencies": {
     "turbo": "^2.3.0",
