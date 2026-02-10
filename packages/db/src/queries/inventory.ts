@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { db } from "../client";
+import { db, type DbTransaction } from "../client";
 import {
   inventoryItems,
   inventoryLots,
@@ -320,59 +320,73 @@ export function createLot(data: {
 
 // ── Movements ────────────────────────────────────────
 
-export function recordMovement(data: {
-  inventoryLotId: string;
-  movementType: string;
-  quantity: number;
-  referenceType?: string | null;
-  referenceId?: string | null;
-  reason?: string | null;
-  performedBy?: string | null;
-}) {
-  const now = new Date().toISOString();
-  const id = uuid();
+export function recordMovement(
+  data: {
+    inventoryLotId: string;
+    movementType: string;
+    quantity: number;
+    referenceType?: string | null;
+    referenceId?: string | null;
+    reason?: string | null;
+    performedBy?: string | null;
+  },
+  tx?: DbTransaction
+) {
+  function execute(d: DbTransaction) {
+    const now = new Date().toISOString();
+    const id = uuid();
 
-  db.insert(stockMovements)
-    .values({
-      id,
-      inventoryLotId: data.inventoryLotId,
-      movementType: data.movementType as
-        | "received"
-        | "consumed"
-        | "adjusted"
-        | "transferred"
-        | "returned"
-        | "written_off",
-      quantity: data.quantity,
-      referenceType: data.referenceType ?? null,
-      referenceId: data.referenceId ?? null,
-      reason: data.reason ?? null,
-      performedBy: data.performedBy ?? null,
-      createdAt: now,
-    })
-    .run();
-
-  // Update lot quantity: positive quantity = stock in, negative = stock out
-  const lot = db
-    .select()
-    .from(inventoryLots)
-    .where(eq(inventoryLots.id, data.inventoryLotId))
-    .get();
-
-  if (lot) {
-    db.update(inventoryLots)
-      .set({
-        quantityOnHand: lot.quantityOnHand + data.quantity,
+    d.insert(stockMovements)
+      .values({
+        id,
+        inventoryLotId: data.inventoryLotId,
+        movementType: data.movementType as
+          | "received"
+          | "consumed"
+          | "adjusted"
+          | "transferred"
+          | "returned"
+          | "written_off",
+        quantity: data.quantity,
+        referenceType: data.referenceType ?? null,
+        referenceId: data.referenceId ?? null,
+        reason: data.reason ?? null,
+        performedBy: data.performedBy ?? null,
+        createdAt: now,
       })
-      .where(eq(inventoryLots.id, data.inventoryLotId))
       .run();
+
+    // Update lot quantity: positive quantity = stock in, negative = stock out
+    const lot = d
+      .select()
+      .from(inventoryLots)
+      .where(eq(inventoryLots.id, data.inventoryLotId))
+      .get();
+
+    if (lot) {
+      const newQty = lot.quantityOnHand + data.quantity;
+      if (newQty < 0) {
+        throw new Error(
+          `Insufficient stock: lot has ${lot.quantityOnHand} on hand, cannot reduce by ${Math.abs(data.quantity)}`
+        );
+      }
+      d.update(inventoryLots)
+        .set({
+          quantityOnHand: newQty,
+        })
+        .where(eq(inventoryLots.id, data.inventoryLotId))
+        .run();
+    }
+
+    return d
+      .select()
+      .from(stockMovements)
+      .where(eq(stockMovements.id, id))
+      .get()!;
   }
 
-  return db
-    .select()
-    .from(stockMovements)
-    .where(eq(stockMovements.id, id))
-    .get()!;
+  if (tx) return execute(tx);
+  return db.transaction((t) => execute(t));
 }
 
 export function getMovements(itemId?: string) {

@@ -2,7 +2,11 @@ import { createCookieSessionStorage, redirect } from "react-router";
 import { queries } from "./db.server";
 import type { UserRole } from "@brewplan/shared";
 
-const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("SESSION_SECRET must be set in production");
+}
+const secret = SESSION_SECRET || "dev-secret-change-me";
 
 export const sessionStorage = createCookieSessionStorage({
   cookie: {
@@ -11,7 +15,7 @@ export const sessionStorage = createCookieSessionStorage({
     maxAge: 60 * 60 * 24 * 7, // 7 days
     path: "/",
     sameSite: "lax",
-    secrets: [SESSION_SECRET],
+    secrets: [secret],
     secure: process.env.NODE_ENV === "production",
   },
 });

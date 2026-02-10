@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { db } from "../client";
+import { db, type DbTransaction } from "../client";
 import {
   orders,
   orderLines,
@@ -104,11 +104,11 @@ export function getWithLines(id: string) {
 
 // ── Create ───────────────────────────────────────────
 
-function generateOrderNumber(): string {
+function generateOrderNumber(tx: DbTransaction): string {
   const year = new Date().getFullYear();
   const prefix = `ORD-${year}-`;
 
-  const countResult = db
+  const countResult = tx
     .select({
       count: sql<number>`count(*)`,
     })
@@ -127,37 +127,39 @@ export function create(data: {
   channel?: string;
   notes?: string | null;
 }) {
-  const now = new Date().toISOString();
-  const id = uuid();
-  const orderNumber = generateOrderNumber();
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const id = uuid();
+    const orderNumber = generateOrderNumber(tx);
 
-  db.insert(orders)
-    .values({
-      id,
-      orderNumber,
-      customerId: data.customerId,
-      status: "draft",
-      orderDate: new Date().toISOString().split("T")[0],
-      deliveryDate: data.deliveryDate ?? null,
-      deliveryAddress: data.deliveryAddress ?? null,
-      channel: (data.channel ?? "wholesale") as
-        | "wholesale"
-        | "taproom"
-        | "online"
-        | "market"
-        | "other",
-      subtotal: 0,
-      tax: 0,
-      total: 0,
-      notes: data.notes ?? null,
-      invoiceNumber: null,
-      paidAt: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run();
+    tx.insert(orders)
+      .values({
+        id,
+        orderNumber,
+        customerId: data.customerId,
+        status: "draft",
+        orderDate: new Date().toISOString().split("T")[0],
+        deliveryDate: data.deliveryDate ?? null,
+        deliveryAddress: data.deliveryAddress ?? null,
+        channel: (data.channel ?? "wholesale") as
+          | "wholesale"
+          | "taproom"
+          | "online"
+          | "market"
+          | "other",
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+        notes: data.notes ?? null,
+        invoiceNumber: null,
+        paidAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
 
-  return get(id)!;
+    return get(id)!;
+  });
 }
 
 // ── Update ───────────────────────────────────────────
@@ -331,11 +333,11 @@ export function recalculateTotals(orderId: string) {
 
 // ── Generate invoice number ──────────────────────────
 
-function generateInvoiceNumber(): string {
+function generateInvoiceNumber(tx: DbTransaction): string {
   const year = new Date().getFullYear();
   const prefix = `INV-${year}-`;
 
-  const countResult = db
+  const countResult = tx
     .select({
       count: sql<number>`count(*)`,
     })
@@ -362,85 +364,42 @@ export function transition(id: string, toStatus: OrderStatus) {
     );
   }
 
-  const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
-    status: toStatus,
-    updatedAt: now,
-  };
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = {
+      status: toStatus,
+      updatedAt: now,
+    };
 
-  const lines = db
-    .select()
-    .from(orderLines)
-    .where(eq(orderLines.orderId, id))
-    .all();
+    const lines = tx
+      .select()
+      .from(orderLines)
+      .where(eq(orderLines.orderId, id))
+      .all();
 
-  // ── Guards ──────────────────────────────────────────
-  if (currentStatus === "draft" && toStatus === "confirmed") {
-    if (lines.length === 0) {
-      throw new Error("At least one order line is required");
-    }
-    for (const line of lines) {
-      if (!line.recipeId || !line.format) {
-        throw new Error("All order lines must have a recipe and format");
+    // ── Guards ──────────────────────────────────────────
+    if (currentStatus === "draft" && toStatus === "confirmed") {
+      if (lines.length === 0) {
+        throw new Error("At least one order line is required");
+      }
+      for (const line of lines) {
+        if (!line.recipeId || !line.format) {
+          throw new Error("All order lines must have a recipe and format");
+        }
+      }
+      if (!order.deliveryDate) {
+        throw new Error("Delivery date must be set before confirming");
       }
     }
-    if (!order.deliveryDate) {
-      throw new Error("Delivery date must be set before confirming");
-    }
-  }
 
-  if (currentStatus === "confirmed" && toStatus === "picking") {
-    for (const line of lines) {
-      if (!line.finishedGoodsId) {
-        throw new Error(
-          "All order lines must be linked to finished goods before picking"
-        );
-      }
-      const fg = db
-        .select()
-        .from(finishedGoodsStock)
-        .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
-        .get();
-      if (!fg) {
-        throw new Error(`Finished goods not found for line "${line.description}"`);
-      }
-      const available = fg.quantityOnHand - fg.quantityReserved;
-      if (available < line.quantity) {
-        throw new Error(
-          `Insufficient stock for "${line.description}": need ${line.quantity}, available ${available}`
-        );
-      }
-    }
-  }
-
-  // ── Side Effects ────────────────────────────────────
-
-  // Reserve stock on picking
-  if (toStatus === "picking") {
-    for (const line of lines) {
-      if (line.finishedGoodsId) {
-        db.update(finishedGoodsStock)
-          .set({
-            quantityReserved: sql`${finishedGoodsStock.quantityReserved} + ${line.quantity}`,
-            updatedAt: now,
-          })
-          .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
-          .run();
-      }
-    }
-  }
-
-  // Dispatch: decrement on_hand and reserved
-  if (toStatus === "dispatched") {
-    // If coming from confirmed (shortcut), also reserve first
-    if (currentStatus === "confirmed") {
+    if (currentStatus === "confirmed" && toStatus === "picking") {
       for (const line of lines) {
         if (!line.finishedGoodsId) {
           throw new Error(
-            "All order lines must be linked to finished goods before dispatch"
+            "All order lines must be linked to finished goods before picking"
           );
         }
-        const fg = db
+        const fg = tx
           .select()
           .from(finishedGoodsStock)
           .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
@@ -457,23 +416,15 @@ export function transition(id: string, toStatus: OrderStatus) {
       }
     }
 
-    for (const line of lines) {
-      if (line.finishedGoodsId) {
-        if (currentStatus === "confirmed") {
-          // Shortcut: just decrement on_hand (no reservation to clear)
-          db.update(finishedGoodsStock)
+    // ── Side Effects ────────────────────────────────────
+
+    // Reserve stock on picking
+    if (toStatus === "picking") {
+      for (const line of lines) {
+        if (line.finishedGoodsId) {
+          tx.update(finishedGoodsStock)
             .set({
-              quantityOnHand: sql`${finishedGoodsStock.quantityOnHand} - ${line.quantity}`,
-              updatedAt: now,
-            })
-            .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
-            .run();
-        } else {
-          // Normal: decrement both on_hand and reserved
-          db.update(finishedGoodsStock)
-            .set({
-              quantityOnHand: sql`${finishedGoodsStock.quantityOnHand} - ${line.quantity}`,
-              quantityReserved: sql`${finishedGoodsStock.quantityReserved} - ${line.quantity}`,
+              quantityReserved: sql`${finishedGoodsStock.quantityReserved} + ${line.quantity}`,
               updatedAt: now,
             })
             .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
@@ -481,44 +432,94 @@ export function transition(id: string, toStatus: OrderStatus) {
         }
       }
     }
-  }
 
-  // Generate invoice number
-  if (toStatus === "invoiced") {
-    updates.invoiceNumber = generateInvoiceNumber();
-  }
-
-  // Set paid_at
-  if (toStatus === "paid") {
-    updates.paidAt = now;
-  }
-
-  // Release reserved stock on cancellation
-  if (toStatus === "cancelled") {
-    for (const line of lines) {
-      if (line.finishedGoodsId) {
-        const fg = db
-          .select()
-          .from(finishedGoodsStock)
-          .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
-          .get();
-        if (fg && fg.quantityReserved > 0) {
-          const releaseQty = Math.min(fg.quantityReserved, line.quantity);
-          db.update(finishedGoodsStock)
-            .set({
-              quantityReserved: sql`${finishedGoodsStock.quantityReserved} - ${releaseQty}`,
-              updatedAt: now,
-            })
+    // Dispatch: decrement on_hand and reserved
+    if (toStatus === "dispatched") {
+      if (currentStatus === "confirmed") {
+        for (const line of lines) {
+          if (!line.finishedGoodsId) {
+            throw new Error(
+              "All order lines must be linked to finished goods before dispatch"
+            );
+          }
+          const fg = tx
+            .select()
+            .from(finishedGoodsStock)
             .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
-            .run();
+            .get();
+          if (!fg) {
+            throw new Error(`Finished goods not found for line "${line.description}"`);
+          }
+          const available = fg.quantityOnHand - fg.quantityReserved;
+          if (available < line.quantity) {
+            throw new Error(
+              `Insufficient stock for "${line.description}": need ${line.quantity}, available ${available}`
+            );
+          }
+        }
+      }
+
+      for (const line of lines) {
+        if (line.finishedGoodsId) {
+          if (currentStatus === "confirmed") {
+            tx.update(finishedGoodsStock)
+              .set({
+                quantityOnHand: sql`${finishedGoodsStock.quantityOnHand} - ${line.quantity}`,
+                updatedAt: now,
+              })
+              .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
+              .run();
+          } else {
+            tx.update(finishedGoodsStock)
+              .set({
+                quantityOnHand: sql`${finishedGoodsStock.quantityOnHand} - ${line.quantity}`,
+                quantityReserved: sql`${finishedGoodsStock.quantityReserved} - ${line.quantity}`,
+                updatedAt: now,
+              })
+              .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
+              .run();
+          }
         }
       }
     }
-  }
 
-  db.update(orders).set(updates).where(eq(orders.id, id)).run();
+    // Generate invoice number
+    if (toStatus === "invoiced") {
+      updates.invoiceNumber = generateInvoiceNumber(tx);
+    }
 
-  return get(id)!;
+    // Set paid_at
+    if (toStatus === "paid") {
+      updates.paidAt = now;
+    }
+
+    // Release reserved stock on cancellation
+    if (toStatus === "cancelled") {
+      for (const line of lines) {
+        if (line.finishedGoodsId) {
+          const fg = tx
+            .select()
+            .from(finishedGoodsStock)
+            .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
+            .get();
+          if (fg && fg.quantityReserved > 0) {
+            const releaseQty = Math.min(fg.quantityReserved, line.quantity);
+            tx.update(finishedGoodsStock)
+              .set({
+                quantityReserved: sql`${finishedGoodsStock.quantityReserved} - ${releaseQty}`,
+                updatedAt: now,
+              })
+              .where(eq(finishedGoodsStock.id, line.finishedGoodsId))
+              .run();
+          }
+        }
+      }
+    }
+
+    tx.update(orders).set(updates).where(eq(orders.id, id)).run();
+
+    return get(id)!;
+  });
 }
 
 // ── Get for Invoice ─────────────────────────────────

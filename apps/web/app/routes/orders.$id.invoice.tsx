@@ -159,6 +159,25 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function formatBillingAddress(customer: {
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+}): string | null {
+  const parts = [
+    customer.addressLine1,
+    customer.addressLine2,
+    [customer.city, customer.state, customer.postcode]
+      .filter(Boolean)
+      .join(" "),
+    customer.country,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : null;
+}
+
 function InvoiceDocument({
   order,
 }: {
@@ -248,11 +267,11 @@ function InvoiceDocument({
                 { style: { fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 2 } },
                 order.customer.name
               ),
-              order.customer.billingAddress
+              formatBillingAddress(order.customer)
                 ? createElement(
                     Text,
                     { style: { fontSize: 9, color: "#555", marginBottom: 2 } },
-                    order.customer.billingAddress
+                    formatBillingAddress(order.customer)!
                   )
                 : null,
               order.customer.email
@@ -419,12 +438,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const doc = createElement(InvoiceDocument, { order });
-  const buffer = await renderToBuffer(doc);
+  const buffer = await renderToBuffer(
+    doc as Parameters<typeof renderToBuffer>[0]
+  );
 
   const filename =
     order.invoiceNumber ?? order.orderNumber ?? `invoice-${order.id}`;
 
-  return new Response(buffer, {
+  return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

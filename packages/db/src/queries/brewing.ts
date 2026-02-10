@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { db } from "../client";
+import { db, type DbTransaction } from "../client";
 import {
   brewBatches,
   brewIngredientConsumptions,
@@ -138,11 +138,11 @@ export function getWithDetails(id: string) {
 
 // ── Create ───────────────────────────────────────────
 
-function generateBatchNumber(): string {
+function generateBatchNumber(tx: DbTransaction): string {
   const year = new Date().getFullYear();
   const prefix = `BP-${year}-`;
 
-  const countResult = db
+  const countResult = tx
     .select({
       count: sql<number>`count(*)`,
     })
@@ -162,51 +162,53 @@ export function create(data: {
   vesselId?: string | null;
   notes?: string | null;
 }) {
-  const now = new Date().toISOString();
-  const id = uuid();
-  const batchNumber = generateBatchNumber();
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const id = uuid();
+    const batchNumber = generateBatchNumber(tx);
 
-  // Get recipe to calculate estimated ready date
-  const recipe = db
-    .select()
-    .from(recipes)
-    .where(eq(recipes.id, data.recipeId))
-    .get();
+    // Get recipe to calculate estimated ready date
+    const recipe = tx
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, data.recipeId))
+      .get();
 
-  let estimatedReadyDate: string | null = null;
-  if (recipe) {
-    const baseDate = data.plannedDate
-      ? new Date(data.plannedDate)
-      : new Date();
-    baseDate.setDate(baseDate.getDate() + recipe.estimatedTotalDays);
-    estimatedReadyDate = baseDate.toISOString().split("T")[0];
-  }
+    let estimatedReadyDate: string | null = null;
+    if (recipe) {
+      const baseDate = data.plannedDate
+        ? new Date(data.plannedDate)
+        : new Date();
+      baseDate.setDate(baseDate.getDate() + recipe.estimatedTotalDays);
+      estimatedReadyDate = baseDate.toISOString().split("T")[0];
+    }
 
-  db.insert(brewBatches)
-    .values({
-      id,
-      batchNumber,
-      recipeId: data.recipeId,
-      status: "planned",
-      plannedDate: data.plannedDate ?? null,
-      brewDate: null,
-      estimatedReadyDate,
-      brewer: data.brewer ?? null,
-      batchSizeLitres: data.batchSizeLitres,
-      actualVolumeLitres: null,
-      actualOg: null,
-      actualFg: null,
-      actualAbv: null,
-      actualIbu: null,
-      vesselId: data.vesselId ?? null,
-      notes: data.notes ?? null,
-      completedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run();
+    tx.insert(brewBatches)
+      .values({
+        id,
+        batchNumber,
+        recipeId: data.recipeId,
+        status: "planned",
+        plannedDate: data.plannedDate ?? null,
+        brewDate: null,
+        estimatedReadyDate,
+        brewer: data.brewer ?? null,
+        batchSizeLitres: data.batchSizeLitres,
+        actualVolumeLitres: null,
+        actualOg: null,
+        actualFg: null,
+        actualAbv: null,
+        actualIbu: null,
+        vesselId: data.vesselId ?? null,
+        notes: data.notes ?? null,
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
 
-  return get(id)!;
+    return get(id)!;
+  });
 }
 
 // ── Update ───────────────────────────────────────────
@@ -255,231 +257,223 @@ export function transition(id: string, toStatus: BatchStatus) {
     );
   }
 
-  // ── Transition guards ──────────────────────────────
-  if (currentStatus === "planned" && toStatus === "brewing") {
-    const recipe = db
-      .select()
-      .from(recipes)
-      .where(eq(recipes.id, batch.recipeId))
-      .get();
-    if (!recipe || recipe.status !== "active") {
-      throw new Error("Recipe must be active before brewing can start");
-    }
-    if (!batch.vesselId) {
-      throw new Error("A vessel must be assigned before brewing can start");
-    }
-    const vessel = db
-      .select()
-      .from(vessels)
-      .where(eq(vessels.id, batch.vesselId))
-      .get();
-    if (!vessel || vessel.status !== "available") {
-      throw new Error("Assigned vessel must be available before brewing can start");
-    }
-  }
-
-  if (currentStatus === "planned" && toStatus === "fermenting") {
-    // Compound shortcut: planned → fermenting (same-day brew + transfer)
-    // Combines guards from planned→brewing AND brewing→fermenting
-    const recipe = db
-      .select()
-      .from(recipes)
-      .where(eq(recipes.id, batch.recipeId))
-      .get();
-    if (!recipe || recipe.status !== "active") {
-      throw new Error("Recipe must be active before brewing can start");
-    }
-    if (!batch.vesselId) {
-      throw new Error("A vessel must be assigned before brewing can start");
-    }
-    const vessel = db
-      .select()
-      .from(vessels)
-      .where(eq(vessels.id, batch.vesselId))
-      .get();
-    if (!vessel || vessel.status !== "available") {
-      throw new Error("Assigned vessel must be available before brewing can start");
-    }
-    if (batch.actualOg == null) {
-      throw new Error("Actual OG must be recorded before moving to fermentation");
-    }
-    const consumptions = db
-      .select()
-      .from(brewIngredientConsumptions)
-      .where(eq(brewIngredientConsumptions.brewBatchId, id))
-      .all();
-    if (consumptions.length === 0) {
-      throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
-    }
-  }
-
-  if (currentStatus === "brewing" && toStatus === "fermenting") {
-    if (batch.actualOg == null) {
-      throw new Error("Actual OG must be recorded before moving to fermentation");
-    }
-    const consumptions = db
-      .select()
-      .from(brewIngredientConsumptions)
-      .where(eq(brewIngredientConsumptions.brewBatchId, id))
-      .all();
-    if (consumptions.length === 0) {
-      throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
-    }
-  }
-
-  if (currentStatus === "fermenting" && toStatus === "conditioning") {
-    const logEntries = db
-      .select()
-      .from(fermentationLogEntries)
-      .where(eq(fermentationLogEntries.brewBatchId, id))
-      .all();
-    if (logEntries.length === 0) {
-      throw new Error("At least one fermentation log entry must be recorded before conditioning");
-    }
-  }
-
-  if (currentStatus === "conditioning" && toStatus === "ready_to_package") {
-    if (batch.actualFg == null) {
-      throw new Error("Actual FG must be recorded before marking ready to package");
-    }
-  }
-
-  if (currentStatus === "ready_to_package" && toStatus === "packaged") {
-    const runs = listPackagingRuns(id);
-    if (runs.length === 0) {
-      throw new Error("At least one packaging run must be recorded before marking as packaged");
-    }
-  }
-
-  const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
-    status: toStatus,
-    updatedAt: now,
-  };
-
-  // Side effects based on transition
-  if (currentStatus === "planned" && toStatus === "brewing") {
-    // Set brew_date to today, vessel to in_use
-    updates.brewDate = new Date().toISOString().split("T")[0];
-
-    if (batch.vesselId) {
-      db.update(vessels)
-        .set({
-          status: "in_use",
-          currentBatchId: id,
-          updatedAt: now,
-        })
+  return db.transaction((tx) => {
+    // ── Transition guards ──────────────────────────────
+    if (currentStatus === "planned" && toStatus === "brewing") {
+      const recipe = tx
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, batch.recipeId))
+        .get();
+      if (!recipe || recipe.status !== "active") {
+        throw new Error("Recipe must be active before brewing can start");
+      }
+      if (!batch.vesselId) {
+        throw new Error("A vessel must be assigned before brewing can start");
+      }
+      const vessel = tx
+        .select()
+        .from(vessels)
         .where(eq(vessels.id, batch.vesselId))
-        .run();
+        .get();
+      if (!vessel || vessel.status !== "available") {
+        throw new Error("Assigned vessel must be available before brewing can start");
+      }
     }
-  }
 
-  if (currentStatus === "planned" && toStatus === "fermenting") {
-    // Compound shortcut side effects: planned→brewing + brewing→fermenting
-    // Set brew_date and vessel to in_use (from planned→brewing)
-    updates.brewDate = new Date().toISOString().split("T")[0];
-
-    if (batch.vesselId) {
-      db.update(vessels)
-        .set({
-          status: "in_use",
-          currentBatchId: id,
-          updatedAt: now,
-        })
+    if (currentStatus === "planned" && toStatus === "fermenting") {
+      const recipe = tx
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, batch.recipeId))
+        .get();
+      if (!recipe || recipe.status !== "active") {
+        throw new Error("Recipe must be active before brewing can start");
+      }
+      if (!batch.vesselId) {
+        throw new Error("A vessel must be assigned before brewing can start");
+      }
+      const vessel = tx
+        .select()
+        .from(vessels)
         .where(eq(vessels.id, batch.vesselId))
-        .run();
+        .get();
+      if (!vessel || vessel.status !== "available") {
+        throw new Error("Assigned vessel must be available before brewing can start");
+      }
+      if (batch.actualOg == null) {
+        throw new Error("Actual OG must be recorded before moving to fermentation");
+      }
+      const consumptions = tx
+        .select()
+        .from(brewIngredientConsumptions)
+        .where(eq(brewIngredientConsumptions.brewBatchId, id))
+        .all();
+      if (consumptions.length === 0) {
+        throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
+      }
     }
 
-    // Record stock movements (from brewing→fermenting)
-    const consumptions = db
-      .select()
-      .from(brewIngredientConsumptions)
-      .where(eq(brewIngredientConsumptions.brewBatchId, id))
-      .all();
-    for (const c of consumptions) {
-      recordMovement({
-        inventoryLotId: c.inventoryLotId,
-        movementType: "consumed",
-        quantity: -c.actualQuantity,
-        referenceType: "brew_batch",
-        referenceId: id,
-        reason: `Consumed in batch ${batch.batchNumber ?? id}`,
-      });
+    if (currentStatus === "brewing" && toStatus === "fermenting") {
+      if (batch.actualOg == null) {
+        throw new Error("Actual OG must be recorded before moving to fermentation");
+      }
+      const consumptions = tx
+        .select()
+        .from(brewIngredientConsumptions)
+        .where(eq(brewIngredientConsumptions.brewBatchId, id))
+        .all();
+      if (consumptions.length === 0) {
+        throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
+      }
     }
-  }
 
-  if (currentStatus === "brewing" && toStatus === "fermenting") {
-    // Record stock movements for all ingredient consumptions
-    const consumptions = db
-      .select()
-      .from(brewIngredientConsumptions)
-      .where(eq(brewIngredientConsumptions.brewBatchId, id))
-      .all();
-    for (const c of consumptions) {
-      recordMovement({
-        inventoryLotId: c.inventoryLotId,
-        movementType: "consumed",
-        quantity: -c.actualQuantity,
-        referenceType: "brew_batch",
-        referenceId: id,
-        reason: `Consumed in batch ${batch.batchNumber ?? id}`,
-      });
+    if (currentStatus === "fermenting" && toStatus === "conditioning") {
+      const logEntries = tx
+        .select()
+        .from(fermentationLogEntries)
+        .where(eq(fermentationLogEntries.brewBatchId, id))
+        .all();
+      if (logEntries.length === 0) {
+        throw new Error("At least one fermentation log entry must be recorded before conditioning");
+      }
     }
-  }
 
-  if (toStatus === "ready_to_package") {
-    // Calculate ABV from OG and FG if both are present
-    if (batch.actualOg && batch.actualFg) {
-      updates.actualAbv =
-        (batch.actualOg - batch.actualFg) * 131.25;
+    if (currentStatus === "conditioning" && toStatus === "ready_to_package") {
+      if (batch.actualFg == null) {
+        throw new Error("Actual FG must be recorded before marking ready to package");
+      }
     }
-  }
 
-  if (currentStatus === "ready_to_package" && toStatus === "packaged") {
-    // Create FinishedGoodsStock records from packaging runs
-    const recipe = db
-      .select()
-      .from(recipes)
-      .where(eq(recipes.id, batch.recipeId))
-      .get();
-    const recipeName = recipe?.name ?? "Unknown";
-
-    const runs = listPackagingRuns(id);
-    for (const run of runs) {
-      const formatLabel = getFormatLabel(run.format);
-      createFinishedGoods({
-        packagingRunId: run.id,
-        brewBatchId: id,
-        recipeId: batch.recipeId,
-        productName: `${recipeName} — ${formatLabel}`,
-        format: run.format,
-        quantityOnHand: run.quantityUnits,
-        bestBeforeDate: run.bestBeforeDate,
-      });
+    if (currentStatus === "ready_to_package" && toStatus === "packaged") {
+      const runs = listPackagingRuns(id, tx);
+      if (runs.length === 0) {
+        throw new Error("At least one packaging run must be recorded before marking as packaged");
+      }
     }
-  }
 
-  if (toStatus === "completed") {
-    updates.completedAt = now;
-  }
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = {
+      status: toStatus,
+      updatedAt: now,
+    };
 
-  // Release vessel on dump or completion-related transitions
-  if (toStatus === "dumped" || toStatus === "cancelled" || toStatus === "packaged") {
-    if (batch.vesselId) {
-      db.update(vessels)
-        .set({
-          status: "available",
-          currentBatchId: null,
-          updatedAt: now,
-        })
-        .where(eq(vessels.id, batch.vesselId))
-        .run();
+    // Side effects based on transition
+    if (currentStatus === "planned" && toStatus === "brewing") {
+      updates.brewDate = new Date().toISOString().split("T")[0];
+
+      if (batch.vesselId) {
+        tx.update(vessels)
+          .set({
+            status: "in_use",
+            currentBatchId: id,
+            updatedAt: now,
+          })
+          .where(eq(vessels.id, batch.vesselId))
+          .run();
+      }
     }
-  }
 
-  db.update(brewBatches).set(updates).where(eq(brewBatches.id, id)).run();
+    if (currentStatus === "planned" && toStatus === "fermenting") {
+      updates.brewDate = new Date().toISOString().split("T")[0];
 
-  return get(id)!;
+      if (batch.vesselId) {
+        tx.update(vessels)
+          .set({
+            status: "in_use",
+            currentBatchId: id,
+            updatedAt: now,
+          })
+          .where(eq(vessels.id, batch.vesselId))
+          .run();
+      }
+
+      const consumptions = tx
+        .select()
+        .from(brewIngredientConsumptions)
+        .where(eq(brewIngredientConsumptions.brewBatchId, id))
+        .all();
+      for (const c of consumptions) {
+        recordMovement({
+          inventoryLotId: c.inventoryLotId,
+          movementType: "consumed",
+          quantity: -c.actualQuantity,
+          referenceType: "brew_batch",
+          referenceId: id,
+          reason: `Consumed in batch ${batch.batchNumber ?? id}`,
+        }, tx);
+      }
+    }
+
+    if (currentStatus === "brewing" && toStatus === "fermenting") {
+      const consumptions = tx
+        .select()
+        .from(brewIngredientConsumptions)
+        .where(eq(brewIngredientConsumptions.brewBatchId, id))
+        .all();
+      for (const c of consumptions) {
+        recordMovement({
+          inventoryLotId: c.inventoryLotId,
+          movementType: "consumed",
+          quantity: -c.actualQuantity,
+          referenceType: "brew_batch",
+          referenceId: id,
+          reason: `Consumed in batch ${batch.batchNumber ?? id}`,
+        }, tx);
+      }
+    }
+
+    if (toStatus === "ready_to_package") {
+      if (batch.actualOg && batch.actualFg) {
+        updates.actualAbv =
+          (batch.actualOg - batch.actualFg) * 131.25;
+      }
+    }
+
+    if (currentStatus === "ready_to_package" && toStatus === "packaged") {
+      const recipe = tx
+        .select()
+        .from(recipes)
+        .where(eq(recipes.id, batch.recipeId))
+        .get();
+      const recipeName = recipe?.name ?? "Unknown";
+
+      const runs = listPackagingRuns(id, tx);
+      for (const run of runs) {
+        const formatLabel = getFormatLabel(run.format);
+        createFinishedGoods({
+          packagingRunId: run.id,
+          brewBatchId: id,
+          recipeId: batch.recipeId,
+          productName: `${recipeName} — ${formatLabel}`,
+          format: run.format,
+          quantityOnHand: run.quantityUnits,
+          bestBeforeDate: run.bestBeforeDate,
+        }, tx);
+      }
+    }
+
+    if (toStatus === "completed") {
+      updates.completedAt = now;
+    }
+
+    if (toStatus === "dumped" || toStatus === "cancelled" || toStatus === "packaged") {
+      if (batch.vesselId) {
+        tx.update(vessels)
+          .set({
+            status: "available",
+            currentBatchId: null,
+            updatedAt: now,
+          })
+          .where(eq(vessels.id, batch.vesselId))
+          .run();
+      }
+    }
+
+    tx.update(brewBatches).set(updates).where(eq(brewBatches.id, id)).run();
+
+    return get(id)!;
+  });
 }
 
 // ── Consumption ──────────────────────────────────────
@@ -496,6 +490,21 @@ export function recordConsumption(
     notes?: string | null;
   }
 ) {
+  // Validate lot has sufficient quantity for the consumption
+  const lot = db
+    .select()
+    .from(inventoryLots)
+    .where(eq(inventoryLots.id, data.inventoryLotId))
+    .get();
+  if (!lot) {
+    throw new Error(`Inventory lot ${data.inventoryLotId} not found`);
+  }
+  if (lot.quantityOnHand < data.actualQuantity) {
+    throw new Error(
+      `Insufficient lot quantity: ${lot.quantityOnHand} available, ${data.actualQuantity} requested`
+    );
+  }
+
   const now = new Date().toISOString();
   const id = uuid();
 

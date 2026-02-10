@@ -6,15 +6,35 @@ import { suppliers, inventoryItems } from "../schema/index";
 // ── List ─────────────────────────────────────────────
 
 export function list(filters?: { archived?: boolean }) {
+  const baseQuery = db
+    .select({
+      id: suppliers.id,
+      name: suppliers.name,
+      contactName: suppliers.contactName,
+      email: suppliers.email,
+      phone: suppliers.phone,
+      address: suppliers.address,
+      website: suppliers.website,
+      paymentTerms: suppliers.paymentTerms,
+      leadTimeDays: suppliers.leadTimeDays,
+      minimumOrderValue: suppliers.minimumOrderValue,
+      notes: suppliers.notes,
+      archived: suppliers.archived,
+      createdAt: suppliers.createdAt,
+      updatedAt: suppliers.updatedAt,
+      itemCount: sql<number>`count(${inventoryItems.id})`,
+    })
+    .from(suppliers)
+    .leftJoin(inventoryItems, eq(inventoryItems.supplierId, suppliers.id))
+    .groupBy(suppliers.id);
+
   if (filters?.archived !== undefined) {
-    return db
-      .select()
-      .from(suppliers)
+    return baseQuery
       .where(eq(suppliers.archived, filters.archived))
       .orderBy(suppliers.name)
       .all();
   }
-  return db.select().from(suppliers).orderBy(suppliers.name).all();
+  return baseQuery.orderBy(suppliers.name).all();
 }
 
 // ── Get ──────────────────────────────────────────────

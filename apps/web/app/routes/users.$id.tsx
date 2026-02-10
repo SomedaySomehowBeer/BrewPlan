@@ -23,6 +23,19 @@ import { Badge } from "~/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
 import { formatDate } from "~/lib/utils";
 
+type UserActionData =
+  | {
+      intent: "update";
+      errors: { name?: string[]; email?: string[]; role?: string[] } | null;
+      success: string | null;
+    }
+  | {
+      intent: "reset-password";
+      errors: { newPassword?: string[] } | null;
+      success: string | null;
+    }
+  | { intent: null; errors: null; success: null };
+
 const roleLabels: Record<string, string> = {
   admin: "Admin",
   brewer: "Brewer",
@@ -102,7 +115,9 @@ export async function action({ request, params }: Route.ActionArgs) {
 
 export default function UserDetail() {
   const { targetUser } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>() as
+    | UserActionData
+    | undefined;
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 

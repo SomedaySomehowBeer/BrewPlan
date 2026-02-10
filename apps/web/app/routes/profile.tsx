@@ -20,6 +20,23 @@ import {
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 
+type ProfileActionData =
+  | {
+      intent: "update-profile";
+      errors: { name?: string[]; email?: string[] } | null;
+      success: string | null;
+    }
+  | {
+      intent: "change-password";
+      errors: {
+        currentPassword?: string[];
+        newPassword?: string[];
+        confirmPassword?: string[];
+      } | null;
+      success: string | null;
+    }
+  | { intent: null; errors: null; success: null };
+
 const roleLabels: Record<string, string> = {
   admin: "Admin",
   brewer: "Brewer",
@@ -105,7 +122,9 @@ export async function action({ request }: Route.ActionArgs) {
 
 export default function Profile() {
   const { profile } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof action>() as
+    | ProfileActionData
+    | undefined;
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 

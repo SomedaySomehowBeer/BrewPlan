@@ -1,6 +1,7 @@
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 import { recipes } from "./recipes";
 import { vessels } from "./vessels";
+import { inventoryLots } from "./inventory";
 
 export const brewBatches = sqliteTable("brew_batches", {
   id: text("id").primaryKey(),
@@ -48,7 +49,9 @@ export const brewIngredientConsumptions = sqliteTable(
       .notNull()
       .references(() => brewBatches.id),
     recipeIngredientId: text("recipe_ingredient_id"),
-    inventoryLotId: text("inventory_lot_id").notNull(),
+    inventoryLotId: text("inventory_lot_id")
+      .notNull()
+      .references(() => inventoryLots.id),
     plannedQuantity: real("planned_quantity").notNull(),
     actualQuantity: real("actual_quantity").notNull(),
     unit: text("unit", { enum: ["kg", "g", "ml", "l", "each"] }).notNull(),

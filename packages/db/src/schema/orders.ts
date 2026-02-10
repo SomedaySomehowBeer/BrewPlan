@@ -35,7 +35,7 @@ export const orders = sqliteTable("orders", {
   tax: real("tax").notNull().default(0),
   total: real("total").notNull().default(0),
   notes: text("notes"),
-  invoiceNumber: text("invoice_number"),
+  invoiceNumber: text("invoice_number").unique(),
   paidAt: text("paid_at"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),

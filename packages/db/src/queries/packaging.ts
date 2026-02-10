@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { db } from "../client";
+import { db, type DbTransaction } from "../client";
 import {
   packagingRuns,
   finishedGoodsStock,
@@ -10,8 +10,9 @@ import {
 
 // ── Packaging Runs ──────────────────────────────────
 
-export function listByBatch(batchId: string) {
-  return db
+export function listByBatch(batchId: string, tx?: DbTransaction) {
+  const d = tx ?? db;
+  return d
     .select()
     .from(packagingRuns)
     .where(eq(packagingRuns.brewBatchId, batchId))
@@ -141,19 +142,23 @@ export function getFinishedGoods(id: string) {
   return result ?? null;
 }
 
-export function createFinishedGoods(data: {
-  packagingRunId: string;
-  brewBatchId: string;
-  recipeId: string;
-  productName: string;
-  format: string;
-  quantityOnHand: number;
-  bestBeforeDate?: string | null;
-}) {
+export function createFinishedGoods(
+  data: {
+    packagingRunId: string;
+    brewBatchId: string;
+    recipeId: string;
+    productName: string;
+    format: string;
+    quantityOnHand: number;
+    bestBeforeDate?: string | null;
+  },
+  tx?: DbTransaction
+) {
+  const d = tx ?? db;
   const now = new Date().toISOString();
   const id = uuid();
 
-  db.insert(finishedGoodsStock)
+  d.insert(finishedGoodsStock)
     .values({
       id,
       packagingRunId: data.packagingRunId,

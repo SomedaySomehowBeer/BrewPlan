@@ -1,6 +1,6 @@
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
-import { db } from "../client";
+import { db, type DbTransaction } from "../client";
 import {
   purchaseOrders,
   purchaseOrderLines,
@@ -97,11 +97,11 @@ export function getWithLines(id: string) {
 
 // ── Create ───────────────────────────────────────────
 
-function generatePoNumber(): string {
+function generatePoNumber(tx: DbTransaction): string {
   const year = new Date().getFullYear();
   const prefix = `PO-${year}-`;
 
-  const countResult = db
+  const countResult = tx
     .select({
       count: sql<number>`count(*)`,
     })
@@ -119,28 +119,30 @@ export function create(data: {
   expectedDeliveryDate?: string | null;
   notes?: string | null;
 }) {
-  const now = new Date().toISOString();
-  const id = uuid();
-  const poNumber = generatePoNumber();
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const id = uuid();
+    const poNumber = generatePoNumber(tx);
 
-  db.insert(purchaseOrders)
-    .values({
-      id,
-      poNumber,
-      supplierId: data.supplierId,
-      status: "draft",
-      orderDate: data.orderDate ?? null,
-      expectedDeliveryDate: data.expectedDeliveryDate ?? null,
-      subtotal: 0,
-      tax: 0,
-      total: 0,
-      notes: data.notes ?? null,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .run();
+    tx.insert(purchaseOrders)
+      .values({
+        id,
+        poNumber,
+        supplierId: data.supplierId,
+        status: "draft",
+        orderDate: data.orderDate ?? null,
+        expectedDeliveryDate: data.expectedDeliveryDate ?? null,
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+        notes: data.notes ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
 
-  return get(id)!;
+    return get(id)!;
+  });
 }
 
 // ── Update ───────────────────────────────────────────
@@ -349,79 +351,89 @@ export function receiveLine(data: {
     );
   }
 
-  const now = new Date().toISOString();
-
-  // 1. Update quantity_received on the PO line
+  // Enforce over-receipt guard
   const newQtyReceived = line.quantityReceived + data.quantityReceived;
-  db.update(purchaseOrderLines)
-    .set({ quantityReceived: newQtyReceived })
-    .where(eq(purchaseOrderLines.id, data.purchaseOrderLineId))
-    .run();
-
-  // 2. Create InventoryLot
-  const lotId = uuid();
-  db.insert(inventoryLots)
-    .values({
-      id: lotId,
-      inventoryItemId: line.inventoryItemId,
-      lotNumber: data.lotNumber,
-      quantityOnHand: data.quantityReceived,
-      unit: line.unit,
-      unitCost: line.unitCost,
-      receivedDate: new Date().toISOString().split("T")[0],
-      purchaseOrderId: po.id,
-      location: data.location ?? null,
-      notes: data.notes ?? null,
-      createdAt: now,
-    })
-    .run();
-
-  // 3. Create StockMovement
-  const movementId = uuid();
-  db.insert(stockMovements)
-    .values({
-      id: movementId,
-      inventoryLotId: lotId,
-      movementType: "received",
-      quantity: data.quantityReceived,
-      referenceType: "purchase_order",
-      referenceId: po.id,
-      reason: `Received against ${po.poNumber}`,
-      performedBy: null,
-      createdAt: now,
-    })
-    .run();
-
-  // 4. Evaluate PO status
-  const allLines = db
-    .select()
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.purchaseOrderId, po.id))
-    .all();
-
-  const allFullyReceived = allLines.every(
-    (l) => l.quantityReceived >= l.quantityOrdered
-  );
-  const anyReceived = allLines.some((l) => l.quantityReceived > 0);
-
-  let newStatus = po.status;
-  if (allFullyReceived) {
-    newStatus = "received";
-  } else if (anyReceived) {
-    newStatus = "partially_received";
+  if (newQtyReceived > line.quantityOrdered) {
+    const remaining = line.quantityOrdered - line.quantityReceived;
+    throw new Error(
+      `Cannot receive ${data.quantityReceived}: only ${remaining} remaining on this line`
+    );
   }
 
-  if (newStatus !== po.status) {
-    db.update(purchaseOrders)
-      .set({
-        status: newStatus,
-        updatedAt: now,
-      })
-      .where(eq(purchaseOrders.id, po.id))
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+
+    // 1. Update quantity_received on the PO line
+    tx.update(purchaseOrderLines)
+      .set({ quantityReceived: newQtyReceived })
+      .where(eq(purchaseOrderLines.id, data.purchaseOrderLineId))
       .run();
-  }
 
-  return { lotId, newPoStatus: newStatus };
+    // 2. Create InventoryLot
+    const lotId = uuid();
+    tx.insert(inventoryLots)
+      .values({
+        id: lotId,
+        inventoryItemId: line.inventoryItemId,
+        lotNumber: data.lotNumber,
+        quantityOnHand: data.quantityReceived,
+        unit: line.unit,
+        unitCost: line.unitCost,
+        receivedDate: new Date().toISOString().split("T")[0],
+        purchaseOrderId: po.id,
+        location: data.location ?? null,
+        notes: data.notes ?? null,
+        createdAt: now,
+      })
+      .run();
+
+    // 3. Create StockMovement
+    const movementId = uuid();
+    tx.insert(stockMovements)
+      .values({
+        id: movementId,
+        inventoryLotId: lotId,
+        movementType: "received",
+        quantity: data.quantityReceived,
+        referenceType: "purchase_order",
+        referenceId: po.id,
+        reason: `Received against ${po.poNumber}`,
+        performedBy: null,
+        createdAt: now,
+      })
+      .run();
+
+    // 4. Evaluate PO status
+    const allLines = tx
+      .select()
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.purchaseOrderId, po.id))
+      .all();
+
+    const allFullyReceived = allLines.every(
+      (l) => l.quantityReceived >= l.quantityOrdered
+    );
+    const anyReceived = allLines.some((l) => l.quantityReceived > 0);
+
+    let newStatus = po.status;
+    if (allFullyReceived) {
+      newStatus = "received";
+    } else if (anyReceived) {
+      newStatus = "partially_received";
+    }
+
+    if (newStatus !== po.status) {
+      tx.update(purchaseOrders)
+        .set({
+          status: newStatus,
+          updatedAt: now,
+        })
+        .where(eq(purchaseOrders.id, po.id))
+        .run();
+    }
+
+    return { lotId, newPoStatus: newStatus };
+  });
 }
 
 // ── Get quantity on order for an inventory item ──────
