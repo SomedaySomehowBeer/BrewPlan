@@ -27,7 +27,7 @@ const STATUS_FILTERS = [
 const OPEN_STATUSES = ["draft", "sent", "acknowledged", "partially_received"];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const url = new URL(request.url);
   const filter = url.searchParams.get("filter") || "all";
@@ -43,11 +43,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     filteredPOs = allPOs.filter((po) => po.status === "cancelled");
   }
 
-  return { purchaseOrders: filteredPOs, filter };
+  return { purchaseOrders: filteredPOs, filter, userRole: user.role };
 }
 
 export default function PurchasingIndex() {
-  const { purchaseOrders, filter } = useLoaderData<typeof loader>();
+  const { purchaseOrders, filter, userRole } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
 
   return (
@@ -65,12 +65,14 @@ export default function PurchasingIndex() {
             </Button>
           ))}
         </div>
-        <Button asChild>
-          <Link to="/purchasing/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New PO
-          </Link>
-        </Button>
+        {userRole !== "viewer" && (
+          <Button asChild>
+            <Link to="/purchasing/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New PO
+            </Link>
+          </Button>
+        )}
       </div>
 
       {purchaseOrders.length === 0 ? (

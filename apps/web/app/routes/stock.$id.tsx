@@ -6,7 +6,7 @@ import {
   redirect,
 } from "react-router";
 import type { Route } from "./+types/stock.$id";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { updateFinishedGoodsSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -28,18 +28,18 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const fg = queries.packaging.getFinishedGoods(params.id);
   if (!fg) {
     throw new Response("Finished goods not found", { status: 404 });
   }
 
-  return { fg };
+  return { fg, userRole: user.role };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const raw = {
@@ -62,7 +62,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function StockDetail() {
-  const { fg } = useLoaderData<typeof loader>();
+  const { fg, userRole } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const errors = actionData?.errors;
 
@@ -154,59 +154,61 @@ export default function StockDetail() {
       </Card>
 
       {/* Edit form for price and location */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form method="post" className="space-y-4">
-            {errors && Object.keys(errors).length > 0 && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                Please fix the errors below.
+      {userRole !== "viewer" && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form method="post" className="space-y-4">
+              {errors && Object.keys(errors).length > 0 && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  Please fix the errors below.
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="unitPrice">Unit Price ($)</Label>
+                <Input
+                  id="unitPrice"
+                  name="unitPrice"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={
+                    fg.unitPrice != null ? formatNumber(fg.unitPrice, 2) : ""
+                  }
+                  placeholder="e.g. 12.50"
+                />
+                {errors?.unitPrice && (
+                  <p className="text-sm text-destructive">{errors.unitPrice}</p>
+                )}
               </div>
-            )}
 
-            <div className="space-y-2">
-              <Label htmlFor="unitPrice">Unit Price ($)</Label>
-              <Input
-                id="unitPrice"
-                name="unitPrice"
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={
-                  fg.unitPrice != null ? formatNumber(fg.unitPrice, 2) : ""
-                }
-                placeholder="e.g. 12.50"
-              />
-              {errors?.unitPrice && (
-                <p className="text-sm text-destructive">{errors.unitPrice}</p>
-              )}
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  name="location"
+                  defaultValue={fg.location ?? ""}
+                  placeholder="e.g. Cold Room A, Shelf 3"
+                />
+                {errors?.location && (
+                  <p className="text-sm text-destructive">{errors.location}</p>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                name="location"
-                defaultValue={fg.location ?? ""}
-                placeholder="e.g. Cold Room A, Shelf 3"
-              />
-              {errors?.location && (
-                <p className="text-sm text-destructive">{errors.location}</p>
-              )}
-            </div>
-
-            <Button
-              type="submit"
-              size="lg"
-              className="w-full min-h-[56px] text-base"
-            >
-              Save Changes
-            </Button>
-          </Form>
-        </CardContent>
-      </Card>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full min-h-[56px] text-base"
+              >
+                Save Changes
+              </Button>
+            </Form>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

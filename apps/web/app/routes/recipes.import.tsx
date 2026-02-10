@@ -7,7 +7,7 @@ import {
 } from "react-router";
 import { useState } from "react";
 import type { Route } from "./+types/recipes.import";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -29,7 +29,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const intent = String(formData.get("intent"));

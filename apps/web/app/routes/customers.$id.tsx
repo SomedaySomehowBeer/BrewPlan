@@ -7,18 +7,18 @@ import { Card, CardContent } from "~/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const customer = queries.customers.get(params.id);
   if (!customer) {
     throw new Response("Customer not found", { status: 404 });
   }
 
-  return { customer };
+  return { customer, userRole: user.role };
 }
 
 export default function CustomerDetailLayout() {
-  const { customer } = useLoaderData<typeof loader>();
+  const { customer, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -46,12 +46,14 @@ export default function CustomerDetailLayout() {
                 </p>
               )}
             </div>
-            <Link
-              to={`/customers/${customer.id}/edit`}
-              className="text-sm text-primary hover:underline min-h-[44px] flex items-center"
-            >
-              Edit
-            </Link>
+            {userRole !== "viewer" && (
+              <Link
+                to={`/customers/${customer.id}/edit`}
+                className="text-sm text-primary hover:underline min-h-[44px] flex items-center"
+              >
+                Edit
+              </Link>
+            )}
           </div>
         </CardContent>
       </Card>

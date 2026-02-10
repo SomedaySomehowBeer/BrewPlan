@@ -24,7 +24,7 @@ const categoryLabels: Record<string, string> = {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const url = new URL(request.url);
   const categoryFilter = url.searchParams.get(
@@ -37,11 +37,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     ? allItems.filter((item) => item.category === categoryFilter)
     : allItems;
 
-  return { items: filteredItems, categoryFilter };
+  return { items: filteredItems, categoryFilter, userRole: user.role };
 }
 
 export default function InventoryIndex() {
-  const { items, categoryFilter } = useLoaderData<typeof loader>();
+  const { items, categoryFilter, userRole } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
 
   function handleCategoryChange(value: string) {
@@ -77,12 +77,14 @@ export default function InventoryIndex() {
               CSV
             </a>
           </Button>
-          <Button asChild>
-            <Link to="/inventory/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Item
-            </Link>
-          </Button>
+          {userRole !== "viewer" && (
+            <Button asChild>
+              <Link to="/inventory/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New Item
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

@@ -17,10 +17,23 @@ const name = process.env.SEED_USER_NAME || "Brewer";
 
 const existingUser = queries.auth.getUserByEmail(email);
 if (!existingUser) {
-  queries.auth.createUser({ email, password, name });
+  queries.auth.createUser({ email, password, name, role: "admin" });
   console.log(`Created admin user: ${email}`);
 } else {
   console.log(`Admin user already exists: ${email}`);
+}
+
+// Seed additional test users (brewer and viewer)
+const testUsers = [
+  { email: "brewer@brewplan.local", password: "changeme", name: "Test Brewer", role: "brewer" as const },
+  { email: "viewer@brewplan.local", password: "changeme", name: "Test Viewer", role: "viewer" as const },
+];
+for (const tu of testUsers) {
+  const existing = queries.auth.getUserByEmail(tu.email);
+  if (!existing) {
+    queries.auth.createUser(tu);
+    console.log(`Created ${tu.role} user: ${tu.email}`);
+  }
 }
 
 // ── Seed Inventory Items ─────────────────────────────

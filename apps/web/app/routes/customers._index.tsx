@@ -17,25 +17,27 @@ import { EmptyState } from "~/components/shared/empty-state";
 import { Plus } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const customers = queries.customers.list();
 
-  return { customers };
+  return { customers, userRole: user.role };
 }
 
 export default function CustomersIndex() {
-  const { customers } = useLoaderData<typeof loader>();
+  const { customers, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button asChild>
-          <Link to="/customers/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Customer
-          </Link>
-        </Button>
+        {userRole !== "viewer" && (
+          <Button asChild>
+            <Link to="/customers/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Customer
+            </Link>
+          </Button>
+        )}
       </div>
 
       {customers.length === 0 ? (

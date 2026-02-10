@@ -6,7 +6,7 @@ import {
   redirect,
 } from "react-router";
 import type { Route } from "./+types/vessels.$id";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { updateVesselSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -61,18 +61,18 @@ const statusActions: Array<{
 ];
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const vessel = queries.vessels.get(params.id);
   if (!vessel) {
     throw new Response("Vessel not found", { status: 404 });
   }
 
-  return { vessel };
+  return { vessel, userRole: user.role };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const intent = formData.get("intent");
@@ -108,7 +108,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function VesselDetail() {
-  const { vessel } = useLoaderData<typeof loader>();
+  const { vessel, userRole } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const errors = actionData?.errors;
   const values = actionData?.values;
@@ -174,7 +174,7 @@ export default function VesselDetail() {
           )}
 
           {/* Status change buttons - LARGE for brewery floor */}
-          {availableStatusActions.length > 0 && (
+          {userRole !== "viewer" && availableStatusActions.length > 0 && (
             <div className="flex flex-wrap gap-3 pt-2">
               {availableStatusActions.map((sa) => {
                 const Icon = sa.icon;

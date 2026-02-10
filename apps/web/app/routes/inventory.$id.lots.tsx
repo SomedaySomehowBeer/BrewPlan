@@ -5,7 +5,7 @@ import {
   useNavigation,
 } from "react-router";
 import type { Route } from "./+types/inventory.$id.lots";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { createInventoryLotSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -46,7 +46,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const userId = await requireUser(request);
+  const user = await requireMutationAccess(request);
 
   const formData = await request.formData();
   const raw = Object.fromEntries(formData);
@@ -69,7 +69,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   queries.inventory.createLot({
     ...result.data,
-    performedBy: userId,
+    performedBy: user.id,
   });
 
   return { ok: true };

@@ -1,11 +1,11 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/orders.$id.transition";
-import { requireUser } from "~/lib/auth.server";
+import { requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { orderTransitionSchema } from "@brewplan/shared";
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const raw = { toStatus: formData.get("toStatus") };

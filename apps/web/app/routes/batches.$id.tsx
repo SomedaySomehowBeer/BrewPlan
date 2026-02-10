@@ -43,7 +43,7 @@ const transitionMeta: Record<
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const batch = queries.batches.getWithDetails(params.id);
   if (!batch) {
@@ -53,11 +53,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const currentStatus = batch.status as BatchStatus;
   const allowedTransitions = BATCH_TRANSITIONS[currentStatus] ?? [];
 
-  return { batch, allowedTransitions };
+  return { batch, allowedTransitions, userRole: user.role };
 }
 
 export default function BatchDetailLayout() {
-  const { batch, allowedTransitions } = useLoaderData<typeof loader>();
+  const { batch, allowedTransitions, userRole } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const error = searchParams.get("error");
 
@@ -135,7 +135,7 @@ export default function BatchDetailLayout() {
           </div>
 
           {/* Transition Buttons - LARGE for brewery floor use (excludes dump) */}
-          {allowedTransitions.filter((s) => s !== "dumped").length > 0 && (
+          {userRole !== "viewer" && allowedTransitions.filter((s) => s !== "dumped").length > 0 && (
             <div className="flex flex-wrap gap-3 pt-2">
               {allowedTransitions
                 .filter((s) => s !== "dumped")
@@ -173,7 +173,7 @@ export default function BatchDetailLayout() {
       <Outlet />
 
       {/* Dump batch — intentionally at the very bottom */}
-      {allowedTransitions.includes("dumped" as BatchStatus) && (
+      {userRole !== "viewer" && allowedTransitions.includes("dumped" as BatchStatus) && (
         <div className="pt-8 border-t mt-8">
           <Form
             method="post"

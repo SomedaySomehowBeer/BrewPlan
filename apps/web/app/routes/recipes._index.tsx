@@ -12,7 +12,7 @@ import { Plus, ClipboardList } from "lucide-react";
 import type { RecipeStatus } from "@brewplan/shared";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const url = new URL(request.url);
   const statusFilter = url.searchParams.get("status") as RecipeStatus | null;
@@ -21,11 +21,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     ? queries.recipes.list({ status: statusFilter })
     : queries.recipes.list();
 
-  return { recipes, statusFilter };
+  return { recipes, statusFilter, userRole: user.role };
 }
 
 export default function RecipesIndex() {
-  const { recipes, statusFilter } = useLoaderData<typeof loader>();
+  const { recipes, statusFilter, userRole } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
 
   function handleStatusChange(value: string) {
@@ -50,12 +50,14 @@ export default function RecipesIndex() {
             <TabsTrigger value="archived">Archived</TabsTrigger>
           </TabsList>
         </Tabs>
-        <Button asChild>
-          <Link to="/recipes/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Recipe
-          </Link>
-        </Button>
+        {userRole !== "viewer" && (
+          <Button asChild>
+            <Link to="/recipes/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Recipe
+            </Link>
+          </Button>
+        )}
       </div>
 
       {recipes.length === 0 ? (

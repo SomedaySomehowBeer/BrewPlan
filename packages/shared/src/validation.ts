@@ -58,6 +58,8 @@ const vesselStatusValues = [
   "out_of_service",
 ] as const;
 
+const userRoleValues = ["admin", "brewer", "viewer"] as const;
+
 // ── Auth ──────────────────────────────────────────────
 
 export const loginSchema = z.object({
@@ -69,6 +71,39 @@ export const createUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
   name: z.string().min(1, "Name is required"),
+});
+
+export const adminCreateUserSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(1, "Name is required"),
+  role: z.enum(userRoleValues).default("brewer"),
+});
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  email: z.string().email("Valid email is required"),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "New password must be at least 8 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+export const adminUpdateUserSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200).optional(),
+  email: z.string().email("Valid email is required").optional(),
+  role: z.enum(userRoleValues).optional(),
+});
+
+export const adminResetPasswordSchema = z.object({
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
 // ── Recipes ───────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { createCookieSessionStorage, redirect } from "react-router";
+import { queries } from "./db.server";
+import type { UserRole } from "@brewplan/shared";
 
 const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
 
@@ -24,12 +26,47 @@ export async function getUserId(request: Request): Promise<string | null> {
   return typeof userId === "string" ? userId : null;
 }
 
-export async function requireUser(request: Request): Promise<string> {
+export interface SessionUser {
+  id: string;
+  name: string;
+  role: UserRole;
+}
+
+export async function requireUser(request: Request): Promise<SessionUser> {
   const userId = await getUserId(request);
   if (!userId) {
     throw redirect("/login");
   }
-  return userId;
+
+  const user = queries.auth.getUserById(userId);
+  if (!user) {
+    throw redirect("/login");
+  }
+
+  return { id: user.id, name: user.name, role: user.role as UserRole };
+}
+
+export async function requireRole(
+  request: Request,
+  ...allowedRoles: UserRole[]
+): Promise<SessionUser> {
+  const user = await requireUser(request);
+  if (!allowedRoles.includes(user.role)) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  return user;
+}
+
+export async function requireMutationAccess(
+  request: Request
+): Promise<SessionUser> {
+  return requireRole(request, "admin", "brewer");
+}
+
+export async function requireAdminAccess(
+  request: Request
+): Promise<SessionUser> {
+  return requireRole(request, "admin");
 }
 
 export async function createUserSession(userId: string, redirectTo: string) {

@@ -18,7 +18,7 @@ const ACTIVE_STATUSES = [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const url = new URL(request.url);
   const filter = url.searchParams.get("filter") || "all";
@@ -44,11 +44,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     vesselName: b.vesselId ? vesselMap.get(b.vesselId) ?? null : null,
   }));
 
-  return { batches, filter };
+  return { batches, filter, userRole: user.role };
 }
 
 export default function BatchesIndex() {
-  const { batches, filter } = useLoaderData<typeof loader>();
+  const { batches, filter, userRole } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
 
   const filters = [
@@ -79,12 +79,14 @@ export default function BatchesIndex() {
               CSV
             </a>
           </Button>
-          <Button asChild>
-            <Link to="/batches/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Batch
-            </Link>
-          </Button>
+          {userRole !== "viewer" && (
+            <Button asChild>
+              <Link to="/batches/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New Batch
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

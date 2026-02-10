@@ -1,6 +1,6 @@
 import { Form, useActionData, redirect } from "react-router";
 import type { Route } from "./+types/vessels.new";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { createVesselSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const raw = {

@@ -25,7 +25,7 @@ const ACTIVE_STATUSES = [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const url = new URL(request.url);
   const filter = url.searchParams.get("filter") || "all";
@@ -43,11 +43,11 @@ export async function loader({ request }: Route.LoaderArgs) {
     );
   }
 
-  return { orders: filteredOrders, filter };
+  return { orders: filteredOrders, filter, userRole: user.role };
 }
 
 export default function OrdersIndex() {
-  const { orders, filter } = useLoaderData<typeof loader>();
+  const { orders, filter, userRole } = useLoaderData<typeof loader>();
   const [, setSearchParams] = useSearchParams();
 
   const filters = [
@@ -78,12 +78,14 @@ export default function OrdersIndex() {
               CSV
             </a>
           </Button>
-          <Button asChild>
-            <Link to="/orders/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Order
-            </Link>
-          </Button>
+          {userRole !== "viewer" && (
+            <Button asChild>
+              <Link to="/orders/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New Order
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

@@ -7,6 +7,7 @@ import {
   NavLink,
   useRouteLoaderData,
 } from "react-router";
+import type { Route } from "./+types/root";
 import type { LinksFunction } from "react-router";
 import {
   ClipboardList,
@@ -23,52 +24,87 @@ import {
   Truck,
   FileText,
   Settings,
+  UserCircle,
+  Shield,
 } from "lucide-react";
 import { useState } from "react";
+import { getUserId } from "~/lib/auth.server";
+import { queries } from "~/lib/db.server";
+import type { UserRole } from "@brewplan/shared";
 import "~/app.css";
 
 export const links: LinksFunction = () => [];
 
-const navGroups = [
-  {
-    label: "Brewing",
-    items: [
-      { to: "/recipes", label: "Recipes", icon: ClipboardList },
-      { to: "/batches", label: "Batches", icon: Beer },
-      { to: "/vessels", label: "Vessels", icon: Container },
-    ],
-  },
-  {
-    label: "Inventory",
-    items: [
-      { to: "/inventory", label: "Raw Materials", icon: Package },
-      { to: "/stock", label: "Finished Goods", icon: Boxes },
-    ],
-  },
-  {
-    label: "Commercial",
-    items: [
-      { to: "/customers", label: "Customers", icon: Users },
-      { to: "/orders", label: "Orders", icon: ShoppingCart },
-      { to: "/suppliers", label: "Suppliers", icon: Truck },
-      { to: "/purchasing", label: "Purchasing", icon: FileText },
-    ],
-  },
-  {
-    label: "Planning",
-    items: [
-      { to: "/planning", label: "Planning", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Admin",
-    items: [
-      { to: "/settings", label: "Settings", icon: Settings },
-    ],
-  },
-];
+export async function loader({ request }: Route.LoaderArgs) {
+  const userId = await getUserId(request);
+  if (!userId) return { user: null };
 
-function Sidebar({ onClose }: { onClose?: () => void }) {
+  const dbUser = queries.auth.getUserById(userId);
+  if (!dbUser) return { user: null };
+
+  return {
+    user: {
+      id: dbUser.id,
+      name: dbUser.name,
+      role: dbUser.role as UserRole,
+    },
+  };
+}
+
+function getNavGroups(userRole: UserRole | null) {
+  const groups = [
+    {
+      label: "Brewing",
+      items: [
+        { to: "/recipes", label: "Recipes", icon: ClipboardList },
+        { to: "/batches", label: "Batches", icon: Beer },
+        { to: "/vessels", label: "Vessels", icon: Container },
+      ],
+    },
+    {
+      label: "Inventory",
+      items: [
+        { to: "/inventory", label: "Raw Materials", icon: Package },
+        { to: "/stock", label: "Finished Goods", icon: Boxes },
+      ],
+    },
+    {
+      label: "Commercial",
+      items: [
+        { to: "/customers", label: "Customers", icon: Users },
+        { to: "/orders", label: "Orders", icon: ShoppingCart },
+        { to: "/suppliers", label: "Suppliers", icon: Truck },
+        { to: "/purchasing", label: "Purchasing", icon: FileText },
+      ],
+    },
+    {
+      label: "Planning",
+      items: [{ to: "/planning", label: "Planning", icon: BarChart3 }],
+    },
+  ];
+
+  if (userRole === "admin") {
+    groups.push({
+      label: "Admin",
+      items: [
+        { to: "/users", label: "Users", icon: Shield },
+        { to: "/settings", label: "Settings", icon: Settings },
+      ],
+    });
+  }
+
+  return groups;
+}
+
+function Sidebar({
+  onClose,
+  user,
+}: {
+  onClose?: () => void;
+  user: { name: string; role: UserRole } | null;
+}) {
+  const navGroups = getNavGroups(user?.role ?? null);
+
   return (
     <div className="flex h-full flex-col bg-card border-r border-border">
       <div className="flex h-16 items-center justify-between px-4 border-b border-border">
@@ -110,7 +146,23 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </div>
         ))}
       </nav>
-      <div className="border-t border-border p-3">
+      <div className="border-t border-border p-3 space-y-0.5">
+        {user && (
+          <NavLink
+            to="/profile"
+            onClick={onClose}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-md px-3 min-h-[44px] text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              }`
+            }
+          >
+            <UserCircle className="h-5 w-5" />
+            {user.name}
+          </NavLink>
+        )}
         <form method="post" action="/logout">
           <button
             type="submit"
@@ -145,6 +197,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const data = useRouteLoaderData("root") as
+    | { user: { id: string; name: string; role: UserRole } | null }
+    | undefined;
+  const user = data?.user ?? null;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -162,7 +218,7 @@ export default function App() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <Sidebar onClose={() => setSidebarOpen(false)} user={user} />
       </div>
 
       {/* Main content */}

@@ -1,10 +1,10 @@
 import { redirect } from "react-router";
 import type { Route } from "./+types/recipes.$id.clone";
-import { requireUser } from "~/lib/auth.server";
+import { requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const recipe = queries.recipes.get(params.id);
   if (!recipe) {

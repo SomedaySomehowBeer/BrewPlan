@@ -5,7 +5,7 @@ import {
   redirect,
 } from "react-router";
 import type { Route } from "./+types/settings._index";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireAdminAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { updateBreweryProfileSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -22,7 +22,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireAdminAccess(request);
 
   const formData = await request.formData();
   const raw = {

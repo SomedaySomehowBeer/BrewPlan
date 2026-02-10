@@ -29,7 +29,7 @@ const transitionMeta: Record<
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const order = queries.orders.getWithLines(params.id);
   if (!order) {
@@ -39,11 +39,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const currentStatus = order.status as OrderStatus;
   const allowedTransitions = ORDER_TRANSITIONS[currentStatus] ?? [];
 
-  return { order, allowedTransitions };
+  return { order, allowedTransitions, userRole: user.role };
 }
 
 export default function OrderDetailLayout() {
-  const { order, allowedTransitions } = useLoaderData<typeof loader>();
+  const { order, allowedTransitions, userRole } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const error = searchParams.get("error");
 
@@ -117,7 +117,7 @@ export default function OrderDetailLayout() {
           </div>
 
           {/* Transition Buttons */}
-          {allowedTransitions.filter((s) => s !== "cancelled").length > 0 && (
+          {userRole !== "viewer" && allowedTransitions.filter((s) => s !== "cancelled").length > 0 && (
             <div className="flex flex-wrap gap-3 pt-2">
               {allowedTransitions
                 .filter((s) => s !== "cancelled")
@@ -152,7 +152,7 @@ export default function OrderDetailLayout() {
       <Outlet />
 
       {/* Cancel order — intentionally at the very bottom */}
-      {allowedTransitions.includes("cancelled" as OrderStatus) && (
+      {userRole !== "viewer" && allowedTransitions.includes("cancelled" as OrderStatus) && (
         <div className="pt-8 border-t mt-8">
           <Form
             method="post"

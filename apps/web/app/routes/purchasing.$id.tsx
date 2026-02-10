@@ -28,7 +28,7 @@ const transitionMeta: Record<
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const po = queries.purchasing.getWithLines(params.id);
   if (!po) {
@@ -38,11 +38,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const currentStatus = po.status as PurchaseOrderStatus;
   const allowedTransitions = PO_TRANSITIONS[currentStatus] ?? [];
 
-  return { po, allowedTransitions };
+  return { po, allowedTransitions, userRole: user.role };
 }
 
 export default function PurchaseOrderDetailLayout() {
-  const { po, allowedTransitions } = useLoaderData<typeof loader>();
+  const { po, allowedTransitions, userRole } = useLoaderData<typeof loader>();
   const [searchParams, setSearchParams] = useSearchParams();
   const error = searchParams.get("error");
 
@@ -118,7 +118,7 @@ export default function PurchaseOrderDetailLayout() {
           </div>
 
           {/* Transition Buttons */}
-          {visibleTransitions.length > 0 && (
+          {userRole !== "viewer" && visibleTransitions.length > 0 && (
             <div className="flex flex-wrap gap-3 pt-2">
               {visibleTransitions.map((toStatus) => {
                 const meta = transitionMeta[toStatus] ?? {

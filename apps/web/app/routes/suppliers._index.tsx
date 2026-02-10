@@ -16,25 +16,27 @@ import {
 import { Plus, Clock, Package } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const suppliers = queries.suppliers.list();
 
-  return { suppliers };
+  return { suppliers, userRole: user.role };
 }
 
 export default function SuppliersIndex() {
-  const { suppliers } = useLoaderData<typeof loader>();
+  const { suppliers, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button asChild>
-          <Link to="/suppliers/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Supplier
-          </Link>
-        </Button>
+        {userRole !== "viewer" && (
+          <Button asChild>
+            <Link to="/suppliers/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Supplier
+            </Link>
+          </Button>
+        )}
       </div>
 
       {suppliers.length === 0 ? (

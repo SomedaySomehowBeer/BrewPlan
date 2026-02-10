@@ -18,23 +18,25 @@ const vesselTypeLabels: Record<string, string> = {
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
   const vessels = queries.vessels.list({ archived: false });
-  return { vessels };
+  return { vessels, userRole: user.role };
 }
 
 export default function VesselsIndex() {
-  const { vessels } = useLoaderData<typeof loader>();
+  const { vessels, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <Button asChild>
-          <Link to="/vessels/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Vessel
-          </Link>
-        </Button>
+        {userRole !== "viewer" && (
+          <Button asChild>
+            <Link to="/vessels/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Vessel
+            </Link>
+          </Button>
+        )}
       </div>
 
       {vessels.length === 0 ? (

@@ -6,7 +6,7 @@ import {
   useNavigation,
 } from "react-router";
 import type { Route } from "./+types/recipes.$id";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/shared/status-badge";
@@ -14,18 +14,18 @@ import { ArrowLeft, Pencil, Archive, CheckCircle, Plus, Copy } from "lucide-reac
 import { redirect } from "react-router";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const recipe = queries.recipes.get(params.id);
   if (!recipe) {
     throw new Response("Recipe not found", { status: 404 });
   }
 
-  return { recipe };
+  return { recipe, userRole: user.role };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const intent = String(formData.get("intent"));
@@ -58,7 +58,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 }
 
 export default function RecipeLayout() {
-  const { recipe } = useLoaderData<typeof loader>();
+  const { recipe, userRole } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
@@ -84,81 +84,83 @@ export default function RecipeLayout() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/recipes/${recipe.id}/edit`}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Link>
-            </Button>
+          {userRole !== "viewer" && (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/recipes/${recipe.id}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Link>
+              </Button>
 
-            {recipe.status === "draft" && (
-              <Form method="post">
-                <input type="hidden" name="intent" value="activate" />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="sm"
-                  disabled={isSubmitting}
-                >
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Activate
-                </Button>
-              </Form>
-            )}
-
-            {recipe.status === "active" && (
-              <>
+              {recipe.status === "draft" && (
                 <Form method="post">
-                  <input type="hidden" name="intent" value="archive" />
+                  <input type="hidden" name="intent" value="activate" />
                   <Button
                     type="submit"
                     variant="outline"
                     size="sm"
                     disabled={isSubmitting}
                   >
-                    <Archive className="mr-2 h-4 w-4" />
-                    Archive
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Activate
                   </Button>
                 </Form>
-                <Form method="post">
-                  <input type="hidden" name="intent" value="create-batch" />
-                  <Button type="submit" size="sm" disabled={isSubmitting}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Batch
-                  </Button>
-                </Form>
-              </>
-            )}
+              )}
 
-            <Form method="post">
-              <input type="hidden" name="intent" value="clone" />
-              <Button
-                type="submit"
-                variant="outline"
-                size="sm"
-                disabled={isSubmitting}
-              >
-                <Copy className="mr-2 h-4 w-4" />
-                Clone as New Version
-              </Button>
-            </Form>
+              {recipe.status === "active" && (
+                <>
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="archive" />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      size="sm"
+                      disabled={isSubmitting}
+                    >
+                      <Archive className="mr-2 h-4 w-4" />
+                      Archive
+                    </Button>
+                  </Form>
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="create-batch" />
+                    <Button type="submit" size="sm" disabled={isSubmitting}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Batch
+                    </Button>
+                  </Form>
+                </>
+              )}
 
-            {recipe.status === "archived" && (
               <Form method="post">
-                <input type="hidden" name="intent" value="reactivate" />
+                <input type="hidden" name="intent" value="clone" />
                 <Button
                   type="submit"
                   variant="outline"
                   size="sm"
                   disabled={isSubmitting}
                 >
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Reactivate
+                  <Copy className="mr-2 h-4 w-4" />
+                  Clone as New Version
                 </Button>
               </Form>
-            )}
-          </div>
+
+              {recipe.status === "archived" && (
+                <Form method="post">
+                  <input type="hidden" name="intent" value="reactivate" />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="sm"
+                    disabled={isSubmitting}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Reactivate
+                  </Button>
+                </Form>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sub-navigation */}

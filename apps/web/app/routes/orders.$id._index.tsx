@@ -36,18 +36,18 @@ const formatLabels: Record<string, string> = {
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const order = queries.orders.getWithLines(params.id);
   if (!order) {
     throw new Response("Order not found", { status: 404 });
   }
 
-  return { order };
+  return { order, userRole: user.role };
 }
 
 export default function OrderDetail() {
-  const { order } = useLoaderData<typeof loader>();
+  const { order, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -138,7 +138,7 @@ export default function OrderDetail() {
       <Card>
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Order Lines</CardTitle>
-          {order.status === "draft" && (
+          {userRole !== "viewer" && order.status === "draft" && (
             <Button asChild size="sm" variant="outline">
               <Link to={`/orders/${order.id}/lines`}>Manage Lines</Link>
             </Button>

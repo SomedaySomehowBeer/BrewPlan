@@ -15,6 +15,7 @@ import type {
   QualityCheckType,
   QualityCheckResult,
   ProcessStepStage,
+  UserRole,
 } from "./enums";
 
 // ── Auth ──────────────────────────────────────────────
@@ -23,6 +24,7 @@ export interface User {
   email: string;
   passwordHash: string;
   name: string;
+  role: UserRole;
   createdAt: string;
   updatedAt: string;
 }

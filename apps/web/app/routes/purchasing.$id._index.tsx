@@ -16,18 +16,18 @@ import { formatDate, formatNumber } from "~/lib/utils";
 import { ListPlus, PackageCheck } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const po = queries.purchasing.getWithLines(params.id);
   if (!po) {
     throw new Response("Purchase order not found", { status: 404 });
   }
 
-  return { po };
+  return { po, userRole: user.role };
 }
 
 export default function PurchaseOrderDetail() {
-  const { po } = useLoaderData<typeof loader>();
+  const { po, userRole } = useLoaderData<typeof loader>();
 
   const canReceive = ["sent", "acknowledged", "partially_received"].includes(
     po.status
@@ -36,24 +36,26 @@ export default function PurchaseOrderDetail() {
   return (
     <div className="space-y-6">
       {/* Action buttons */}
-      <div className="flex flex-wrap gap-3">
-        {po.status === "draft" && (
-          <Button asChild>
-            <Link to={`/purchasing/${po.id}/lines`}>
-              <ListPlus className="mr-2 h-4 w-4" />
-              Manage Lines
-            </Link>
-          </Button>
-        )}
-        {canReceive && (
-          <Button variant="outline" asChild>
-            <Link to={`/purchasing/${po.id}/receive`}>
-              <PackageCheck className="mr-2 h-4 w-4" />
-              Receive Items
-            </Link>
-          </Button>
-        )}
-      </div>
+      {userRole !== "viewer" && (
+        <div className="flex flex-wrap gap-3">
+          {po.status === "draft" && (
+            <Button asChild>
+              <Link to={`/purchasing/${po.id}/lines`}>
+                <ListPlus className="mr-2 h-4 w-4" />
+                Manage Lines
+              </Link>
+            </Button>
+          )}
+          {canReceive && (
+            <Button variant="outline" asChild>
+              <Link to={`/purchasing/${po.id}/receive`}>
+                <PackageCheck className="mr-2 h-4 w-4" />
+                Receive Items
+              </Link>
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Supplier Info */}
       {po.supplier && (

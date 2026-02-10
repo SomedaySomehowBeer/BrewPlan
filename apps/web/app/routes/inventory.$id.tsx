@@ -18,18 +18,18 @@ const categoryLabels: Record<string, string> = {
 };
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const item = queries.inventory.get(params.id);
   if (!item) {
     throw new Response("Inventory item not found", { status: 404 });
   }
 
-  return { item };
+  return { item, userRole: user.role };
 }
 
 export default function InventoryItemLayout() {
-  const { item } = useLoaderData<typeof loader>();
+  const { item, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -60,14 +60,16 @@ export default function InventoryItemLayout() {
             )}
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to={`/inventory/${item.id}/edit`}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Link>
-            </Button>
-          </div>
+          {userRole !== "viewer" && (
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link to={`/inventory/${item.id}/edit`}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Sub-navigation */}

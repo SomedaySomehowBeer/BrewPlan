@@ -1,20 +1,19 @@
-import { Outlet, Link } from "react-router";
-import type { Route } from "./+types/settings";
+import { Outlet } from "react-router";
+import type { Route } from "./+types/users";
 import { requireAdminAccess } from "~/lib/auth.server";
-import { ArrowLeft } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
   await requireAdminAccess(request);
   return {};
 }
 
-export default function SettingsLayout() {
+export default function UsersLayout() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
+        <h1 className="text-2xl font-bold">Users</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your brewery profile and configuration.
+          Manage user accounts and roles.
         </p>
       </div>
       <Outlet />

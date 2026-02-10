@@ -6,7 +6,7 @@ import {
   Link,
 } from "react-router";
 import type { Route } from "./+types/inventory.$id.edit";
-import { requireUser } from "~/lib/auth.server";
+import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { updateInventoryItemSchema } from "@brewplan/shared";
 import { Button } from "~/components/ui/button";
@@ -34,7 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  await requireUser(request);
+  await requireMutationAccess(request);
 
   const formData = await request.formData();
   const raw = Object.fromEntries(formData);

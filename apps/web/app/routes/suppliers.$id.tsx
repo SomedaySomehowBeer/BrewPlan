@@ -6,18 +6,18 @@ import { Button } from "~/components/ui/button";
 import { ArrowLeft, Pencil } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const supplier = queries.suppliers.get(params.id);
   if (!supplier) {
     throw new Response("Supplier not found", { status: 404 });
   }
 
-  return { supplier };
+  return { supplier, userRole: user.role };
 }
 
 export default function SupplierDetailLayout() {
-  const { supplier } = useLoaderData<typeof loader>();
+  const { supplier, userRole } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-6">
@@ -38,14 +38,16 @@ export default function SupplierDetailLayout() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`/suppliers/${supplier.id}/edit`}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </Link>
-          </Button>
-        </div>
+        {userRole !== "viewer" && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/suppliers/${supplier.id}/edit`}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
+            </Button>
+          </div>
+        )}
       </div>
 
       <Outlet />

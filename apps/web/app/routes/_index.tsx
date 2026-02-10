@@ -8,7 +8,7 @@ import { StatusBadge } from "~/components/shared/status-badge";
 import { ClipboardList, Package, Beer, Container } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
-  await requireUser(request);
+  const user = await requireUser(request);
 
   const [recipes, batches, vessels, inventoryItems] = await Promise.all([
     queries.recipes.list(),
@@ -41,11 +41,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       lowStockItems,
     },
     recentBatches,
+    userRole: user.role,
   };
 }
 
 export default function Dashboard() {
-  const { stats, recentBatches } = useLoaderData<typeof loader>();
+  const { stats, recentBatches, userRole } = useLoaderData<typeof loader>();
 
   const statCards = [
     {
@@ -128,14 +129,16 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-3">
-        <Button asChild>
-          <Link to="/batches/new">New Batch</Link>
-        </Button>
-        <Button variant="outline" asChild>
-          <Link to="/recipes/new">New Recipe</Link>
-        </Button>
-      </div>
+      {userRole !== "viewer" && (
+        <div className="flex gap-3">
+          <Button asChild>
+            <Link to="/batches/new">New Batch</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/recipes/new">New Recipe</Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
