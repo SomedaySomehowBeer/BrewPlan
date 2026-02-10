@@ -276,46 +276,48 @@ export function createLot(data: {
   notes?: string | null;
   performedBy?: string | null;
 }) {
-  const now = new Date().toISOString();
-  const lotId = uuid();
+  return db.transaction((tx) => {
+    const now = new Date().toISOString();
+    const lotId = uuid();
 
-  db.insert(inventoryLots)
-    .values({
-      id: lotId,
-      inventoryItemId: data.inventoryItemId,
-      lotNumber: data.lotNumber,
-      quantityOnHand: data.quantityOnHand,
-      unit: data.unit as "kg" | "g" | "ml" | "l" | "each",
-      unitCost: data.unitCost,
-      receivedDate: data.receivedDate,
-      expiryDate: data.expiryDate ?? null,
-      location: data.location ?? null,
-      notes: data.notes ?? null,
-      createdAt: now,
-    })
-    .run();
+    tx.insert(inventoryLots)
+      .values({
+        id: lotId,
+        inventoryItemId: data.inventoryItemId,
+        lotNumber: data.lotNumber,
+        quantityOnHand: data.quantityOnHand,
+        unit: data.unit as "kg" | "g" | "ml" | "l" | "each",
+        unitCost: data.unitCost,
+        receivedDate: data.receivedDate,
+        expiryDate: data.expiryDate ?? null,
+        location: data.location ?? null,
+        notes: data.notes ?? null,
+        createdAt: now,
+      })
+      .run();
 
-  // Create a "received" stock movement
-  const movementId = uuid();
-  db.insert(stockMovements)
-    .values({
-      id: movementId,
-      inventoryLotId: lotId,
-      movementType: "received",
-      quantity: data.quantityOnHand,
-      referenceType: null,
-      referenceId: null,
-      reason: "Initial lot receipt",
-      performedBy: data.performedBy ?? null,
-      createdAt: now,
-    })
-    .run();
+    // Create a "received" stock movement
+    const movementId = uuid();
+    tx.insert(stockMovements)
+      .values({
+        id: movementId,
+        inventoryLotId: lotId,
+        movementType: "received",
+        quantity: data.quantityOnHand,
+        referenceType: null,
+        referenceId: null,
+        reason: "Initial lot receipt",
+        performedBy: data.performedBy ?? null,
+        createdAt: now,
+      })
+      .run();
 
-  return db
-    .select()
-    .from(inventoryLots)
-    .where(eq(inventoryLots.id, lotId))
-    .get()!;
+    return tx
+      .select()
+      .from(inventoryLots)
+      .where(eq(inventoryLots.id, lotId))
+      .get()!;
+  });
 }
 
 // ── Movements ────────────────────────────────────────

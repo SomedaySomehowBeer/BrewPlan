@@ -180,29 +180,31 @@ export function addLine(
     notes?: string | null;
   }
 ) {
-  const id = uuid();
-  const lineTotal = data.quantityOrdered * data.unitCost;
+  return db.transaction((tx) => {
+    const id = uuid();
+    const lineTotal = data.quantityOrdered * data.unitCost;
 
-  db.insert(purchaseOrderLines)
-    .values({
-      id,
-      purchaseOrderId: poId,
-      inventoryItemId: data.inventoryItemId,
-      quantityOrdered: data.quantityOrdered,
-      quantityReceived: 0,
-      unit: data.unit as "kg" | "g" | "ml" | "l" | "each",
-      unitCost: data.unitCost,
-      lineTotal,
-      notes: data.notes ?? null,
-    })
-    .run();
+    tx.insert(purchaseOrderLines)
+      .values({
+        id,
+        purchaseOrderId: poId,
+        inventoryItemId: data.inventoryItemId,
+        quantityOrdered: data.quantityOrdered,
+        quantityReceived: 0,
+        unit: data.unit as "kg" | "g" | "ml" | "l" | "each",
+        unitCost: data.unitCost,
+        lineTotal,
+        notes: data.notes ?? null,
+      })
+      .run();
 
-  recalculateTotals(poId);
-  return db
-    .select()
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.id, id))
-    .get()!;
+    recalculateTotals(poId, tx);
+    return tx
+      .select()
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.id, id))
+      .get()!;
+  });
 }
 
 export function updateLine(
@@ -213,115 +215,137 @@ export function updateLine(
     notes?: string | null;
   }
 ) {
-  const existing = db
-    .select()
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.id, lineId))
-    .get();
-  if (!existing) throw new Error(`PO line ${lineId} not found`);
+  db.transaction((tx) => {
+    const existing = tx
+      .select()
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.id, lineId))
+      .get();
+    if (!existing) throw new Error(`PO line ${lineId} not found`);
 
-  const qty = data.quantityOrdered ?? existing.quantityOrdered;
-  const cost = data.unitCost ?? existing.unitCost;
+    const qty = data.quantityOrdered ?? existing.quantityOrdered;
+    const cost = data.unitCost ?? existing.unitCost;
 
-  db.update(purchaseOrderLines)
-    .set({
-      quantityOrdered: qty,
-      unitCost: cost,
-      lineTotal: qty * cost,
-      notes: data.notes !== undefined ? data.notes ?? null : existing.notes,
-    })
-    .where(eq(purchaseOrderLines.id, lineId))
-    .run();
+    // Guard: cannot lower quantityOrdered below what has already been received
+    if (qty < existing.quantityReceived) {
+      throw new Error(
+        `Cannot set quantity ordered to ${qty}: ${existing.quantityReceived} already received`
+      );
+    }
 
-  recalculateTotals(existing.purchaseOrderId);
+    tx.update(purchaseOrderLines)
+      .set({
+        quantityOrdered: qty,
+        unitCost: cost,
+        lineTotal: qty * cost,
+        notes: data.notes !== undefined ? data.notes ?? null : existing.notes,
+      })
+      .where(eq(purchaseOrderLines.id, lineId))
+      .run();
+
+    recalculateTotals(existing.purchaseOrderId, tx);
+  });
 }
 
 export function removeLine(lineId: string) {
-  const existing = db
-    .select()
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.id, lineId))
-    .get();
-  if (!existing) throw new Error(`PO line ${lineId} not found`);
+  db.transaction((tx) => {
+    const existing = tx
+      .select()
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.id, lineId))
+      .get();
+    if (!existing) throw new Error(`PO line ${lineId} not found`);
 
-  db.delete(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.id, lineId))
-    .run();
+    tx.delete(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.id, lineId))
+      .run();
 
-  recalculateTotals(existing.purchaseOrderId);
+    recalculateTotals(existing.purchaseOrderId, tx);
+  });
 }
 
 // ── Totals ───────────────────────────────────────────
 
-export function recalculateTotals(poId: string) {
-  const result = db
-    .select({
-      subtotal: sql<number>`coalesce(sum(${purchaseOrderLines.lineTotal}), 0)`,
-    })
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.purchaseOrderId, poId))
-    .get();
+export function recalculateTotals(poId: string, tx?: DbTransaction) {
+  function execute(d: DbTransaction) {
+    const result = d
+      .select({
+        subtotal: sql<number>`coalesce(sum(${purchaseOrderLines.lineTotal}), 0)`,
+      })
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.purchaseOrderId, poId))
+      .get();
 
-  const subtotal = result?.subtotal ?? 0;
-  const tax = Math.round(subtotal * DEFAULT_TAX_RATE * 100) / 100;
-  const total = Math.round((subtotal + tax) * 100) / 100;
+    const subtotal = result?.subtotal ?? 0;
+    const tax = Math.round(subtotal * DEFAULT_TAX_RATE * 100) / 100;
+    const total = Math.round((subtotal + tax) * 100) / 100;
 
-  db.update(purchaseOrders)
-    .set({
-      subtotal,
-      tax,
-      total,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(purchaseOrders.id, poId))
-    .run();
+    d.update(purchaseOrders)
+      .set({
+        subtotal,
+        tax,
+        total,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(purchaseOrders.id, poId))
+      .run();
+  }
+
+  if (tx) { execute(tx); return; }
+  db.transaction((t) => execute(t));
 }
 
 // ── Transition ───────────────────────────────────────
 
 export function transition(id: string, toStatus: PurchaseOrderStatus) {
-  const po = get(id);
-  if (!po) throw new Error(`Purchase order ${id} not found`);
-
-  const currentStatus = po.status as PurchaseOrderStatus;
-  const allowedTransitions = PO_TRANSITIONS[currentStatus];
-
-  if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
-    throw new Error(
-      `Invalid transition from "${currentStatus}" to "${toStatus}"`
-    );
-  }
-
-  // Guards
-  if (currentStatus === "draft" && toStatus === "sent") {
-    const lines = db
+  return db.transaction((tx) => {
+    const po = tx
       .select()
-      .from(purchaseOrderLines)
-      .where(eq(purchaseOrderLines.purchaseOrderId, id))
-      .all();
-    if (lines.length === 0) {
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, id))
+      .get();
+    if (!po) throw new Error(`Purchase order ${id} not found`);
+
+    const currentStatus = po.status as PurchaseOrderStatus;
+    const allowedTransitions = PO_TRANSITIONS[currentStatus];
+
+    if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
       throw new Error(
-        "At least one line item is required before sending a PO"
+        `Invalid transition from "${currentStatus}" to "${toStatus}"`
       );
     }
-  }
 
-  const now = new Date().toISOString();
-  const updates: Record<string, unknown> = {
-    status: toStatus,
-    updatedAt: now,
-  };
-
-  // Side effects
-  if (currentStatus === "draft" && toStatus === "sent") {
-    if (!po.orderDate) {
-      updates.orderDate = new Date().toISOString().split("T")[0];
+    // Guards
+    if (currentStatus === "draft" && toStatus === "sent") {
+      const lines = tx
+        .select()
+        .from(purchaseOrderLines)
+        .where(eq(purchaseOrderLines.purchaseOrderId, id))
+        .all();
+      if (lines.length === 0) {
+        throw new Error(
+          "At least one line item is required before sending a PO"
+        );
+      }
     }
-  }
 
-  db.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, id)).run();
+    const now = new Date().toISOString();
+    const updates: Record<string, unknown> = {
+      status: toStatus,
+      updatedAt: now,
+    };
 
-  return get(id)!;
+    // Side effects
+    if (currentStatus === "draft" && toStatus === "sent") {
+      if (!po.orderDate) {
+        updates.orderDate = new Date().toISOString().split("T")[0];
+      }
+    }
+
+    tx.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, id)).run();
+
+    return get(id)!;
+  });
 }
 
 // ── Receive Line ─────────────────────────────────────
@@ -333,34 +357,38 @@ export function receiveLine(data: {
   location?: string | null;
   notes?: string | null;
 }) {
-  const line = db
-    .select()
-    .from(purchaseOrderLines)
-    .where(eq(purchaseOrderLines.id, data.purchaseOrderLineId))
-    .get();
-  if (!line) throw new Error(`PO line ${data.purchaseOrderLineId} not found`);
-
-  const po = get(line.purchaseOrderId);
-  if (!po) throw new Error(`Purchase order not found`);
-
-  // Validate PO status
-  const validStatuses = ["sent", "acknowledged", "partially_received"];
-  if (!validStatuses.includes(po.status)) {
-    throw new Error(
-      `Cannot receive goods for a PO with status "${po.status}"`
-    );
-  }
-
-  // Enforce over-receipt guard
-  const newQtyReceived = line.quantityReceived + data.quantityReceived;
-  if (newQtyReceived > line.quantityOrdered) {
-    const remaining = line.quantityOrdered - line.quantityReceived;
-    throw new Error(
-      `Cannot receive ${data.quantityReceived}: only ${remaining} remaining on this line`
-    );
-  }
-
   return db.transaction((tx) => {
+    const line = tx
+      .select()
+      .from(purchaseOrderLines)
+      .where(eq(purchaseOrderLines.id, data.purchaseOrderLineId))
+      .get();
+    if (!line) throw new Error(`PO line ${data.purchaseOrderLineId} not found`);
+
+    const po = tx
+      .select()
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, line.purchaseOrderId))
+      .get();
+    if (!po) throw new Error(`Purchase order not found`);
+
+    // Validate PO status
+    const validStatuses = ["sent", "acknowledged", "partially_received"];
+    if (!validStatuses.includes(po.status)) {
+      throw new Error(
+        `Cannot receive goods for a PO with status "${po.status}"`
+      );
+    }
+
+    // Enforce over-receipt guard
+    const newQtyReceived = line.quantityReceived + data.quantityReceived;
+    if (newQtyReceived > line.quantityOrdered) {
+      const remaining = line.quantityOrdered - line.quantityReceived;
+      throw new Error(
+        `Cannot receive ${data.quantityReceived}: only ${remaining} remaining on this line`
+      );
+    }
+
     const now = new Date().toISOString();
 
     // 1. Update quantity_received on the PO line

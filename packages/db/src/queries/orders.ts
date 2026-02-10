@@ -200,60 +200,62 @@ export function addLine(
     notes?: string | null;
   }
 ) {
-  const id = uuid();
-  const lineTotal = data.quantity * data.unitPrice;
+  return db.transaction((tx) => {
+    const id = uuid();
+    const lineTotal = data.quantity * data.unitPrice;
 
-  // Auto-generate description if not provided
-  const recipe = db
-    .select()
-    .from(recipes)
-    .where(eq(recipes.id, data.recipeId))
-    .get();
+    // Auto-generate description if not provided
+    const recipe = tx
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, data.recipeId))
+      .get();
 
-  const FORMAT_LABELS: Record<string, string> = {
-    keg_50l: "50L Keg",
-    keg_30l: "30L Keg",
-    keg_20l: "20L Keg",
-    can_375ml: "375ml Can",
-    can_355ml: "355ml Can",
-    bottle_330ml: "330ml Bottle",
-    bottle_500ml: "500ml Bottle",
-    other: "Other",
-  };
+    const FORMAT_LABELS: Record<string, string> = {
+      keg_50l: "50L Keg",
+      keg_30l: "30L Keg",
+      keg_20l: "20L Keg",
+      can_375ml: "375ml Can",
+      can_355ml: "355ml Can",
+      bottle_330ml: "330ml Bottle",
+      bottle_500ml: "500ml Bottle",
+      other: "Other",
+    };
 
-  const description =
-    data.description ||
-    `${recipe?.name ?? "Unknown"} — ${FORMAT_LABELS[data.format] ?? data.format}`;
+    const description =
+      data.description ||
+      `${recipe?.name ?? "Unknown"} — ${FORMAT_LABELS[data.format] ?? data.format}`;
 
-  db.insert(orderLines)
-    .values({
-      id,
-      orderId,
-      recipeId: data.recipeId,
-      format: data.format as
-        | "keg_50l"
-        | "keg_30l"
-        | "keg_20l"
-        | "can_375ml"
-        | "can_355ml"
-        | "bottle_330ml"
-        | "bottle_500ml"
-        | "other",
-      finishedGoodsId: null,
-      description,
-      quantity: data.quantity,
-      unitPrice: data.unitPrice,
-      lineTotal,
-      notes: data.notes ?? null,
-    })
-    .run();
+    tx.insert(orderLines)
+      .values({
+        id,
+        orderId,
+        recipeId: data.recipeId,
+        format: data.format as
+          | "keg_50l"
+          | "keg_30l"
+          | "keg_20l"
+          | "can_375ml"
+          | "can_355ml"
+          | "bottle_330ml"
+          | "bottle_500ml"
+          | "other",
+        finishedGoodsId: null,
+        description,
+        quantity: data.quantity,
+        unitPrice: data.unitPrice,
+        lineTotal,
+        notes: data.notes ?? null,
+      })
+      .run();
 
-  recalculateTotals(orderId);
-  return db
-    .select()
-    .from(orderLines)
-    .where(eq(orderLines.id, id))
-    .get()!;
+    recalculateTotals(orderId, tx);
+    return tx
+      .select()
+      .from(orderLines)
+      .where(eq(orderLines.id, id))
+      .get()!;
+  });
 }
 
 export function updateLine(
@@ -265,70 +267,79 @@ export function updateLine(
     finishedGoodsId?: string | null;
   }
 ) {
-  const existing = db
-    .select()
-    .from(orderLines)
-    .where(eq(orderLines.id, lineId))
-    .get();
-  if (!existing) throw new Error(`Order line ${lineId} not found`);
+  db.transaction((tx) => {
+    const existing = tx
+      .select()
+      .from(orderLines)
+      .where(eq(orderLines.id, lineId))
+      .get();
+    if (!existing) throw new Error(`Order line ${lineId} not found`);
 
-  const qty = data.quantity ?? existing.quantity;
-  const price = data.unitPrice ?? existing.unitPrice;
+    const qty = data.quantity ?? existing.quantity;
+    const price = data.unitPrice ?? existing.unitPrice;
 
-  const updates: Record<string, unknown> = {
-    quantity: qty,
-    unitPrice: price,
-    lineTotal: qty * price,
-  };
+    const updates: Record<string, unknown> = {
+      quantity: qty,
+      unitPrice: price,
+      lineTotal: qty * price,
+    };
 
-  if (data.notes !== undefined) updates.notes = data.notes ?? null;
-  if (data.finishedGoodsId !== undefined)
-    updates.finishedGoodsId = data.finishedGoodsId ?? null;
+    if (data.notes !== undefined) updates.notes = data.notes ?? null;
+    if (data.finishedGoodsId !== undefined)
+      updates.finishedGoodsId = data.finishedGoodsId ?? null;
 
-  db.update(orderLines)
-    .set(updates)
-    .where(eq(orderLines.id, lineId))
-    .run();
+    tx.update(orderLines)
+      .set(updates)
+      .where(eq(orderLines.id, lineId))
+      .run();
 
-  recalculateTotals(existing.orderId);
+    recalculateTotals(existing.orderId, tx);
+  });
 }
 
 export function removeLine(lineId: string) {
-  const existing = db
-    .select()
-    .from(orderLines)
-    .where(eq(orderLines.id, lineId))
-    .get();
-  if (!existing) throw new Error(`Order line ${lineId} not found`);
+  db.transaction((tx) => {
+    const existing = tx
+      .select()
+      .from(orderLines)
+      .where(eq(orderLines.id, lineId))
+      .get();
+    if (!existing) throw new Error(`Order line ${lineId} not found`);
 
-  db.delete(orderLines).where(eq(orderLines.id, lineId)).run();
-  recalculateTotals(existing.orderId);
+    tx.delete(orderLines).where(eq(orderLines.id, lineId)).run();
+    recalculateTotals(existing.orderId, tx);
+  });
 }
 
 // ── Totals ───────────────────────────────────────────
 
-export function recalculateTotals(orderId: string) {
-  const result = db
-    .select({
-      subtotal: sql<number>`coalesce(sum(${orderLines.lineTotal}), 0)`,
-    })
-    .from(orderLines)
-    .where(eq(orderLines.orderId, orderId))
-    .get();
+export function recalculateTotals(orderId: string, tx?: DbTransaction) {
+  function execute(d: DbTransaction) {
+    const result = d
+      .select({
+        subtotal: sql<number>`coalesce(sum(${orderLines.lineTotal}), 0)`,
+      })
+      .from(orderLines)
+      .where(eq(orderLines.orderId, orderId))
+      .get();
 
-  const subtotal = result?.subtotal ?? 0;
-  const tax = Math.round(subtotal * DEFAULT_TAX_RATE * 100) / 100;
-  const total = Math.round((subtotal + tax) * 100) / 100;
+    const subtotal = result?.subtotal ?? 0;
+    const tax = Math.round(subtotal * DEFAULT_TAX_RATE * 100) / 100;
+    const total = Math.round((subtotal + tax) * 100) / 100;
 
-  db.update(orders)
-    .set({
-      subtotal,
-      tax,
-      total,
-      updatedAt: new Date().toISOString(),
-    })
-    .where(eq(orders.id, orderId))
-    .run();
+    d.update(orders)
+      .set({
+        subtotal,
+        tax,
+        total,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(orders.id, orderId))
+      .run();
+  }
+
+  if (tx) { execute(tx); return; }
+  db.transaction((t) => execute(t));
 }
 
 // ── Generate invoice number ──────────────────────────
@@ -352,19 +363,19 @@ function generateInvoiceNumber(tx: DbTransaction): string {
 // ── Transition ───────────────────────────────────────
 
 export function transition(id: string, toStatus: OrderStatus) {
-  const order = get(id);
-  if (!order) throw new Error(`Order ${id} not found`);
-
-  const currentStatus = order.status as OrderStatus;
-  const allowedTransitions = ORDER_TRANSITIONS[currentStatus];
-
-  if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
-    throw new Error(
-      `Invalid transition from "${currentStatus}" to "${toStatus}"`
-    );
-  }
-
   return db.transaction((tx) => {
+    const order = tx.select().from(orders).where(eq(orders.id, id)).get();
+    if (!order) throw new Error(`Order ${id} not found`);
+
+    const currentStatus = order.status as OrderStatus;
+    const allowedTransitions = ORDER_TRANSITIONS[currentStatus];
+
+    if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
+      throw new Error(
+        `Invalid transition from "${currentStatus}" to "${toStatus}"`
+      );
+    }
+
     const now = new Date().toISOString();
     const updates: Record<string, unknown> = {
       status: toStatus,

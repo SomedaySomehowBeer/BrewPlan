@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, check } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import { brewBatches } from "./brewing";
 import { recipes } from "./recipes";
 
@@ -59,4 +60,7 @@ export const finishedGoodsStock = sqliteTable("finished_goods_stock", {
   location: text("location"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [
+  check("fg_qty_on_hand_nonneg", sql`${table.quantityOnHand} >= 0`),
+  check("fg_qty_reserved_nonneg", sql`${table.quantityReserved} >= 0`),
+]);

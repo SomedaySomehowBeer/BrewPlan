@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, check } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import { suppliers } from "./suppliers";
 
 export const inventoryItems = sqliteTable("inventory_items", {
@@ -50,7 +51,9 @@ export const inventoryLots = sqliteTable("inventory_lots", {
   location: text("location"),
   notes: text("notes"),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  check("lot_qty_on_hand_nonneg", sql`${table.quantityOnHand} >= 0`),
+]);
 
 export const stockMovements = sqliteTable("stock_movements", {
   id: text("id").primaryKey(),

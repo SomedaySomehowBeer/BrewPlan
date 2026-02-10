@@ -1,320 +1,224 @@
-# BrewPlan Code Review Recommendations
+# BrewPlan Post-Fix Review: Ongoing and New Considerations
 
 Date: 2026-02-10  
 Reviewer: Codex
 
-## Scope and Method
+## Review Context
 
-This review covered:
+This pass reviewed:
 
-1. Monorepo scripts and quality gates (`package.json`, `turbo.json`)
-2. Core web routes (`apps/web/app/routes/**`)
-3. Auth/session setup (`apps/web/app/lib/auth.server.ts`)
-4. Data layer and schema (`packages/db/src/queries/**`, `packages/db/src/schema/**`)
-5. E2E harness (`apps/web/e2e/**`)
+1. `RESPONSE.md` implementation claims
+2. Commit `87ca329` code changes
+3. Current runtime checks
 
-Commands executed:
+Validation rerun in this workspace:
 
-1. `pnpm typecheck` (failed)
-2. `pnpm lint` (passed but did not actually lint app code)
-3. `pnpm build` (passed)
-4. `pnpm --filter @brewplan/web test:e2e -- --list` (failed during web server startup with `EMFILE`)
+1. `pnpm typecheck` passed
+2. `pnpm build` passed
+3. `pnpm --filter @brewplan/web test:e2e -- --list` failed with `EMFILE`
 
-## Executive Summary
+Only ongoing/new concerns are listed below.
 
-The most serious issues are:
+## Findings (Ordered by Severity)
 
-1. Type safety is currently broken in `apps/web`, and the release build does not enforce typecheck success.
-2. Several critical data mutations are non-transactional, allowing partial writes and inconsistent business state.
-3. Inventory and receiving flows allow impossible states (over-receipt, negative stock) because server-side validation is insufficient.
-4. Identifier generation (`BP/PO/ORD/INV`) is race-prone under concurrency.
-5. Session secret handling has an insecure production fallback.
-
-## Findings and Recommendations
-
-### 1) [High] Release pipeline allows shipping with broken TypeScript
+### 1) [High] Transaction logic still has TOCTOU windows from pre-transaction reads
 
 Evidence:
 
-1. `pnpm typecheck` fails with many TS errors in:
-`apps/web/app/routes/orders.$id.invoice.tsx`, `apps/web/app/routes/profile.tsx`, `apps/web/app/routes/users.$id.tsx`, `apps/web/app/routes/suppliers._index.tsx`.
-2. Root build script is only `turbo build`: `package.json:5`.
-3. Web build script is only `react-router build` (no typecheck): `apps/web/package.json:8`.
-4. `pnpm build` still passes despite `pnpm typecheck` failure.
+1. `orders.transition` reads `order` and `currentStatus` before opening transaction:
+`packages/db/src/queries/orders.ts:354-365`.
+2. `purchasing.receiveLine` reads PO line + PO + computes `newQtyReceived` before opening transaction:
+`packages/db/src/queries/purchasing.ts:336-361`.
+3. `brewing.transition` reads `batch` and `currentStatus` before opening transaction:
+`packages/db/src/queries/brewing.ts:247-258`.
 
 Why it matters:
 
-1. Runtime regressions can be released while static contracts are already known-bad.
-2. This increases production defect risk and slows future refactors.
+1. These checks can become stale between read and write in multi-process or concurrent-writer scenarios.
+2. Result: transition/receiving decisions may be made against outdated state.
 
 Recommendation:
 
-1. Make typecheck a hard gate in CI and in release builds.
-2. Update root scripts so `build` runs typecheck first or ensure CI enforces `pnpm typecheck`.
-3. Consider changing web build script to include `react-router typegen && tsc --noEmit` before `react-router build`.
+1. Move initial reads and transition/guard validation inside transaction callbacks.
+2. Use a single in-transaction snapshot for all validations and writes.
+3. For high-contention writes, consider `BEGIN IMMEDIATE` semantics or explicit retry on conflict.
 
 ---
 
-### 2) [High] Multi-step state transitions are not transactional
+### 2) [High] Count-based sequence generation still risks collisions under concurrent writers
 
 Evidence:
 
-1. `packages/db/src/queries/orders.ts:352-521` performs multi-table side effects without a transaction.
-2. `packages/db/src/queries/purchasing.ts:327-425` updates PO line quantities, creates lots, writes movements, and updates PO status without transaction boundaries.
-3. `packages/db/src/queries/brewing.ts:245-483` updates batches, vessels, movements, and finished goods without transaction boundaries.
-4. `packages/db/src/queries/inventory.ts:323-376` writes movement then updates lot quantity with separate calls.
-5. No DB transactions are used anywhere in `packages/db/src` (`rg "transaction\\("` returned no matches).
-
-Why it matters:
-
-1. Partial commit risk: failures in the middle of these flows can leave data inconsistent.
-2. Inconsistent stock, reservation, or status state will corrupt planning and fulfillment decisions.
-
-Recommendation:
-
-1. Wrap each multi-step mutation in `db.transaction(...)`.
-2. Ensure all validation reads and writes occur inside the same transaction.
-3. Add regression tests that simulate failures mid-operation and assert rollback behavior.
-
----
-
-### 3) [High] Receiving and consumption allow invalid stock states
-
-Evidence:
-
-1. `receiveLine` increments `quantityReceived` without bounding to `quantityOrdered`: `packages/db/src/queries/purchasing.ts:355-358`.
-2. `receivePoLineSchema` only checks positive quantity, not remaining allowable quantity: `packages/shared/src/validation.ts:324-330`.
-3. UI sets an HTML `max` attribute client-side (`apps/web/app/routes/purchasing.$id.receive.tsx:142`) but server logic does not enforce it.
-4. `recordMovement` updates lot quantity blindly and can push negative on-hand: `packages/db/src/queries/inventory.ts:355-369`.
-5. `recordConsumption` accepts positive quantities but does not validate against lot availability: `packages/db/src/queries/brewing.ts:487-529` and `packages/shared/src/validation.ts:211-219`.
-
-Why it matters:
-
-1. Negative stock and over-receipt break core inventory correctness.
-2. Downstream planning, purchasing, and costing become unreliable.
-
-Recommendation:
-
-1. Enforce `newQtyReceived <= quantityOrdered` server-side within transaction.
-2. Enforce `lot.quantityOnHand + movementDelta >= 0` server-side.
-3. Add DB `CHECK` constraints for non-negative fields (`quantity_on_hand`, `quantity_reserved`, `quantity_received`).
-4. Return structured validation errors for these domain violations.
-
----
-
-### 4) [High] Sequence generation is race-prone and invoice numbers are not uniquely constrained
-
-Evidence:
-
-1. Count-based ID sequences:
-`packages/db/src/queries/brewing.ts:141-155`,
-`packages/db/src/queries/purchasing.ts:100-114`,
+1. Sequence generation remains `count(*) + 1`:
 `packages/db/src/queries/orders.ts:107-121`,
-`packages/db/src/queries/orders.ts:334-348`.
-2. `orders.invoiceNumber` lacks unique constraint: `packages/db/src/schema/orders.ts:38`.
+`packages/db/src/queries/orders.ts:336-350`,
+`packages/db/src/queries/purchasing.ts:100-114`,
+`packages/db/src/queries/brewing.ts:141-155`.
+2. There is still no retry path on unique constraint failure.
 
 Why it matters:
 
-1. Concurrent writes can compute same next sequence value.
-2. Unique collisions can produce intermittent 500s.
-3. Invoice numbering can duplicate under race conditions because schema does not enforce uniqueness.
+1. Transaction wrapping reduces but does not fully eliminate collision risk across concurrent writers/processes.
+2. Failures surface as runtime write errors at business-critical points (order/PO/batch/invoice creation).
 
 Recommendation:
 
-1. Replace count-based numbering with a dedicated sequence table or atomic increment row.
-2. Add unique index on `orders.invoice_number` (if business rules require uniqueness).
-3. Add retry logic on unique constraint conflicts.
+1. Replace count-based sequences with an atomic counter table per sequence key/year.
+2. Add retry-on-unique-conflict guards where sequence-based inserts occur.
+3. Add targeted concurrency tests for number generation.
 
 ---
 
-### 5) [High] Session secret has insecure fallback in production path
+### 3) [Medium] E2E stability issue remains unresolved in this environment
 
 Evidence:
 
-1. `apps/web/app/lib/auth.server.ts:5` sets `SESSION_SECRET` fallback to `"dev-secret-change-me"`.
+1. Playwright still starts `react-router dev` as web server:
+`apps/web/e2e/playwright.config.ts:30`.
+2. Reproduced failure:
+`pnpm --filter @brewplan/web test:e2e -- --list` -> `EMFILE: too many open files, watch`.
 
 Why it matters:
 
-1. If environment config is missing in production, sessions become forgeable.
-2. This is an account/session compromise risk.
+1. Test suite availability is environment-sensitive and can fail before tests execute.
+2. This weakens CI reliability and makes verification claims hard to reproduce consistently.
 
 Recommendation:
 
-1. In production, fail fast when `SESSION_SECRET` is missing or weak.
-2. Require minimum entropy/length.
-3. Keep fallback only for explicit local development mode.
+1. Use production-mode server for CI E2E (`react-router build` + `react-router-serve`) to avoid watcher limits.
+2. Keep dev-server mode optional for local interactive debugging.
+3. Document expected `ulimit` and fallback strategy.
 
 ---
 
-### 6) [Medium] Supplier list route expects fields not returned by query
+### 4) [Medium] Some multi-step write paths are still not atomic
 
 Evidence:
 
-1. Route consumes `supplier.itemCount`: `apps/web/app/routes/suppliers._index.tsx:76`, `:79`, `:124`.
-2. `queries.suppliers.list()` only returns supplier columns and no aggregate `itemCount`: `packages/db/src/queries/suppliers.ts:8-18`.
-3. This mismatch is part of the current typecheck failure.
+1. `inventory.createLot` performs lot insert and movement insert without transaction:
+`packages/db/src/queries/inventory.ts:282-312`.
+2. `orders.addLine` and `purchasing.addLine` write line then recalc totals as separate operations:
+`packages/db/src/queries/orders.ts:226-250`,
+`packages/db/src/queries/purchasing.ts:184-199`.
 
 Why it matters:
 
-1. Broken contract between data layer and UI.
-2. Causes compile failures and incorrect supplier UX.
+1. Partial write failures can still leave inconsistent aggregates/audit trails in these paths.
+2. Atomicity improvements are uneven across the data layer.
 
 Recommendation:
 
-1. Update `suppliers.list()` to left-join inventory items and return `itemCount`.
-2. Add typed return contracts for query functions to catch these mismatches earlier.
+1. Wrap each multi-step mutation path in one transaction.
+2. Keep write + dependent aggregate updates in the same unit of work.
 
 ---
 
-### 7) [Medium] Invoice route uses fields and types that do not match data contracts
+### 5) [Medium] DB-level invariants are still mostly unenforced (app-level checks only)
 
 Evidence:
 
-1. References `order.customer.billingAddress`, which does not exist in customer schema/query shape: `apps/web/app/routes/orders.$id.invoice.tsx:251-256`.
-2. `renderToBuffer` result is passed directly to `Response` and fails TS typing: `apps/web/app/routes/orders.$id.invoice.tsx:422` and `:427`.
-3. Route is currently in typecheck error set.
+1. `finished_goods_stock` has no `CHECK` constraints for nonnegative quantities:
+`packages/db/src/schema/packaging.ts:55-56`.
+2. Similar lack of schema-level constraints for inventory lot and PO quantity invariants.
 
 Why it matters:
 
-1. Invoice generation path is brittle and currently not type-safe.
-2. Billing address output can be incorrect or omitted.
+1. App-layer guards do not protect against direct SQL, migration bugs, or future code regressions.
+2. Invalid values (negative stock/reservations, inconsistent received quantities) remain structurally possible.
 
 Recommendation:
 
-1. Build invoice address from existing customer fields (`addressLine1`, `addressLine2`, `city`, `state`, `postcode`, `country`) in query or route.
-2. Normalize buffer handling for `Response` body type compatibility.
-3. Add focused tests for invoice loader and PDF generation.
+1. Add schema `CHECK` constraints for:
+`quantity_on_hand >= 0`, `quantity_reserved >= 0`, and `quantity_received >= 0`.
+2. Add business checks where feasible, e.g. `quantity_received <= quantity_ordered`.
+3. Add data cleanup migration steps before enabling strict checks.
 
 ---
 
-### 8) [Medium] Profile and user-detail action data typing is not discriminated
+### 6) [Medium] PO line updates can create invalid over-received states
 
 Evidence:
 
-1. Property access on unioned `errors` object causes compile errors in:
-`apps/web/app/routes/profile.tsx:158-249` and
-`apps/web/app/routes/users.$id.tsx:157-231`.
-2. The action return shape is varied, but consumer code assumes narrow shapes by `intent` without strong typing.
+1. `purchasing.updateLine` allows lowering `quantityOrdered` without validating existing `quantityReceived`:
+`packages/db/src/queries/purchasing.ts:206-235`.
 
 Why it matters:
 
-1. Core account-management pages are currently type-broken.
-2. This pattern is fragile and easy to regress.
+1. A line can become logically over-received after edit.
+2. Downstream `quantityOrdered - quantityReceived` computations can go negative and distort planning.
 
 Recommendation:
 
-1. Define explicit `ActionData` discriminated unions keyed by `intent`.
-2. Return consistent payload shapes per intent.
-3. Add lightweight component tests for error rendering.
+1. Enforce `newQuantityOrdered >= quantityReceived` in `updateLine`.
+2. Add schema constraint and/or defensive normalization for on-order calculations.
 
 ---
 
-### 9) [Medium] E2E harness is unstable in constrained environments
+### 7) [Low] Session secret hardening still checks presence, not quality
 
 Evidence:
 
-1. Playwright config starts dev server with watchers: `apps/web/e2e/playwright.config.ts:30`.
-2. Running `pnpm --filter @brewplan/web test:e2e -- --list` failed with:
-`Error: EMFILE: too many open files, watch`.
+1. Production guard enforces only non-empty secret:
+`apps/web/app/lib/auth.server.ts:5-9`.
 
 Why it matters:
 
-1. E2E test execution can fail before tests even start.
-2. Reduces confidence in CI signal and developer feedback loop.
+1. Weak secrets remain possible in production and reduce session security posture.
 
 Recommendation:
 
-1. Use production mode web server for E2E in CI (`react-router build` + `react-router-serve`) to avoid watch overhead.
-2. Keep dev-server mode only for local interactive runs.
-3. Consider splitting smoke tests for faster, deterministic CI.
+1. Enforce minimum secret strength in production (length/entropy policy).
+2. Optionally reject known weak/default values explicitly.
 
 ---
 
-### 10) [Medium] Missing foreign key for consumption lot references
+### 8) [Low] `.gitignore` rule for errors is overly broad
 
 Evidence:
 
-1. `brewIngredientConsumptions.inventoryLotId` is plain text and not FK-constrained:
-`packages/db/src/schema/brewing.ts:51`.
-2. Query logic assumes valid lot linkage via inner join:
-`packages/db/src/queries/brewing.ts:93-103`.
+1. Current ignore rule: `errors.*`:
+`.gitignore:15`.
 
 Why it matters:
 
-1. Orphaned consumption rows can exist and disappear from detail views due inner join behavior.
-2. Data integrity is not enforced at the DB layer.
+1. This can accidentally hide legitimate source files named like `errors.tsx` in any directory.
 
 Recommendation:
 
-1. Add FK reference from `brew_ingredient_consumptions.inventory_lot_id` to `inventory_lots.id`.
-2. Add migration to backfill/clean invalid rows before enabling constraint.
+1. Narrow to the specific artifact path/pattern (for example, scoped path in `apps/web`), rather than global `errors.*`.
 
 ---
 
-### 11) [Low] Lint command does not lint application code today
+### 9) [Low] Lint coverage is still missing
 
 Evidence:
 
-1. Root lint script is `turbo lint`: `package.json:7`.
-2. `turbo.json` lint task has only dependency config and no outputs: `turbo.json:12-14`.
-3. Packages do not define `lint` scripts, so `pnpm lint` effectively does not run static linting for app code.
+1. Repository still has no package-level lint scripts or ESLint configuration.
 
 Why it matters:
 
-1. Style and bug-prone patterns are not systematically detected.
-2. Increases review burden and inconsistency.
+1. Static quality checks rely heavily on typecheck only.
+2. Style and common correctness patterns are not automatically enforced.
 
 Recommendation:
 
-1. Add ESLint with package-level `lint` scripts.
-2. Gate CI on both `pnpm lint` and `pnpm typecheck`.
+1. Add ESLint with package-level `lint` scripts and CI gating.
 
 ---
 
-### 12) [Low] Stray artifact file contains internal debug output and local paths
+### 10) [Low] Known N+1 query patterns remain
 
 Evidence:
 
-1. `apps/web/errors.*}` is an HTML/debug dump containing local filesystem paths and stack traces:
-`apps/web/errors.*}:1-88`.
+1. Recipe detail loader performs per-ingredient item lookup:
+`apps/web/app/routes/recipes.$id._index.tsx:47-53`.
+2. Batch consumption loader performs per-item lot lookup:
+`apps/web/app/routes/batches.$id.consumption.tsx:37-43`.
 
 Why it matters:
 
-1. Repository hygiene issue.
-2. Avoidable disclosure of local machine paths and internal stack data in source control.
+1. Performance scales poorly with data growth.
 
 Recommendation:
 
-1. Remove this file from repository history if possible.
-2. Add ignore pattern to prevent accidental re-commit of debug dumps.
-
----
-
-### 13) [Low] Several loaders/exports use avoidable N+1 query patterns
-
-Evidence:
-
-1. `recipes.$id._index` loops ingredients and fetches inventory one-by-one: `apps/web/app/routes/recipes.$id._index.tsx:47-53`.
-2. `batches.$id.consumption` loops inventory items and fetches lots one-by-one: `apps/web/app/routes/batches.$id.consumption.tsx:37-43`.
-3. `getInventoryForCsvExport` loops inventory items and queries lots per item:
-`packages/db/src/queries/reporting.ts:124-145`.
-
-Why it matters:
-
-1. Performance degrades as dataset grows.
-2. Page/report latency will scale poorly.
-
-Recommendation:
-
-1. Replace per-item lookups with set-based joins/aggregates.
-2. Keep domain calculations in SQL where possible.
-
-## Recommended Implementation Order
-
-1. Fix release gating: enforce typecheck in CI and build process.
-2. Add transaction boundaries to `orders.transition`, `purchasing.receiveLine`, `brewing.transition`, and `inventory.recordMovement`.
-3. Implement strict server-side stock/receiving constraints.
-4. Replace count-based numbering with safe sequence generation and enforce invoice uniqueness.
-5. Fix active compile errors (`invoice`, `profile`, `users`, `suppliers`) and add targeted tests.
-6. Harden auth secret handling.
-7. Stabilize E2E harness and then expand regression coverage around transitions/inventory invariants.
+1. Convert these to set-based queries/joins in query-layer functions.

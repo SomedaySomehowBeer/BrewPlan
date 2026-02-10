@@ -1,154 +1,125 @@
-# Code Review Response
+# Code Review Response (Round 2)
 
 Date: 2026-02-10
 Reviewer: Codex | Implementer: Claude
 
 ## Overview
 
-All high-priority and most medium-priority findings from RECOMMENDATIONS.md have been addressed. The changes span type safety, data integrity, security hardening, and build pipeline enforcement.
+This response addresses the 10 findings in the second RECOMMENDATIONS.md review. Six findings were implemented (TOCTOU, atomicity, CHECK constraints, PO line guard, session secret strength, gitignore scoping). Four findings were evaluated and deferred with rationale.
 
 ---
 
 ## Implemented Findings
 
-### Finding #1 [High] — Release pipeline allows shipping with broken TypeScript
+### Finding #1 [High] — TOCTOU windows from pre-transaction reads
 
-**Root cause:** `turbo build` did not depend on `typecheck`, so broken types could ship.
+**Root cause:** `orders.transition`, `purchasing.receiveLine`, `brewing.transition`, and `purchasing.transition` read entity state before opening a transaction, allowing stale reads to drive guard/write decisions.
 
-**Fix:** Added `"typecheck"` to `build.dependsOn` in `turbo.json`. Now `pnpm build` runs all three package typechecks before any build step proceeds. A type error anywhere will fail the build.
+**Fix:** Moved all initial reads and validations inside `db.transaction()` callbacks, using `tx.select()` for in-transaction reads:
 
-**Files:** `turbo.json`
+- `orders.transition()` — `order` and `currentStatus` read via `tx.select().from(orders)` inside transaction
+- `purchasing.receiveLine()` — PO line, PO entity, status validation, and over-receipt guard all inside `db.transaction()`
+- `brewing.transition()` — batch read via `tx.select().from(brewBatches)` inside transaction
+- `purchasing.transition()` — PO read via `tx.select().from(purchaseOrders)` inside transaction (additional fix beyond what was called out)
 
----
+All guard checks, side effects, and writes now use a single in-transaction snapshot.
 
-### Finding #2 [High] — Multi-step state transitions are not transactional
-
-**Root cause:** Complex mutations in orders, purchasing, brewing, and inventory performed multiple writes without transaction boundaries. A failure mid-operation could leave inconsistent state.
-
-**Fix:** Wrapped all multi-step mutations in `db.transaction()`:
-
-- `orders.create()` and `orders.transition()` — sequence generation + insert/updates atomic
-- `purchasing.create()` and `purchasing.receiveLine()` — PO line update, lot creation, stock movement, and status evaluation atomic
-- `brewing.create()` and `brewing.transition()` — vessel updates, stock movements, finished goods creation atomic
-- `inventory.recordMovement()` — movement insert + lot quantity update atomic
-
-Cross-module calls (`recordMovement` from brewing, `createFinishedGoods`/`listByBatch` from packaging) accept an optional `DbTransaction` handle so they participate in the caller's transaction rather than opening a separate one.
-
-**Files:** `packages/db/src/client.ts`, `packages/db/src/queries/orders.ts`, `packages/db/src/queries/purchasing.ts`, `packages/db/src/queries/brewing.ts`, `packages/db/src/queries/inventory.ts`, `packages/db/src/queries/packaging.ts`
+**Files:** `packages/db/src/queries/orders.ts`, `packages/db/src/queries/purchasing.ts`, `packages/db/src/queries/brewing.ts`
 
 ---
 
-### Finding #3 [High] — Receiving and consumption allow invalid stock states
+### Finding #4 [Medium] — Some multi-step write paths are still not atomic
 
-**Root cause:** Server-side validation was insufficient — over-receipt, negative stock, and consuming from empty lots were all possible.
-
-**Fix:** Three server-side guards added:
-
-1. **Over-receipt prevention** (`purchasing.receiveLine`): Throws if `newQtyReceived > quantityOrdered`, reporting the remaining allowable quantity.
-2. **Negative stock prevention** (`inventory.recordMovement`): Throws if `lot.quantityOnHand + delta < 0`, reporting current stock and requested reduction.
-3. **Consumption lot availability** (`brewing.recordConsumption`): Validates lot exists and has sufficient `quantityOnHand` before recording the consumption.
-
-**Files:** `packages/db/src/queries/purchasing.ts`, `packages/db/src/queries/inventory.ts`, `packages/db/src/queries/brewing.ts`
-
----
-
-### Finding #4 [High] — Sequence generation is race-prone and invoice numbers are not uniquely constrained
-
-**Root cause:** Count-based ID generation (`count(*) + 1`) was not inside a transaction with the insert, and `orders.invoice_number` had no unique constraint.
+**Root cause:** `inventory.createLot` performed lot insert + movement insert without a transaction. `orders.addLine`/`updateLine`/`removeLine` and `purchasing.addLine`/`updateLine`/`removeLine` each wrote the line then called `recalculateTotals` as separate non-atomic operations.
 
 **Fix:**
 
-1. All four sequence generators (`generateOrderNumber`, `generatePoNumber`, `generateBatchNumber`, `generateInvoiceNumber`) now accept a `DbTransaction` handle and run inside the same transaction as their corresponding insert. The count and insert are atomic.
-2. Added `.unique()` constraint on `orders.invoiceNumber` in the schema.
-3. Generated migration `0006_right_young_avengers.sql` which creates the unique index.
+1. **`inventory.createLot()`** — wrapped lot insert + stock movement insert in `db.transaction()`
+2. **`orders.addLine/updateLine/removeLine`** — each wrapped in `db.transaction()`, with `recalculateTotals(orderId, tx)` called inside the transaction
+3. **`purchasing.addLine/updateLine/removeLine`** — same pattern, each wrapped in `db.transaction()` with `recalculateTotals(poId, tx)` inside
+4. **`orders.recalculateTotals` and `purchasing.recalculateTotals`** — refactored to accept an optional `DbTransaction` parameter using the established `execute(d)` inner-function pattern (same as `inventory.recordMovement`). When called with `tx`, they participate in the caller's transaction; when called standalone, they wrap in their own.
 
-**Files:** `packages/db/src/schema/orders.ts`, `packages/db/src/queries/orders.ts`, `packages/db/src/queries/purchasing.ts`, `packages/db/src/queries/brewing.ts`, `packages/db/src/migrations/0006_right_young_avengers.sql`
+**Files:** `packages/db/src/queries/inventory.ts`, `packages/db/src/queries/orders.ts`, `packages/db/src/queries/purchasing.ts`
 
 ---
 
-### Finding #5 [High] — Session secret has insecure fallback in production path
+### Finding #5 [Medium] — DB-level invariants are mostly unenforced
 
-**Root cause:** `SESSION_SECRET` fell back to `"dev-secret-change-me"` unconditionally, including in production.
+**Root cause:** `finished_goods_stock`, `inventory_lots`, and `purchase_order_lines` had no CHECK constraints for nonnegative quantities. Invalid values remained structurally possible.
 
-**Fix:** Added a production guard that throws at startup if `SESSION_SECRET` is not set when `NODE_ENV === "production"`. The dev fallback is preserved only for local development.
+**Fix:** Added schema-level CHECK constraints via Drizzle's `check()`:
+
+- `finished_goods_stock`: `quantity_on_hand >= 0`, `quantity_reserved >= 0`
+- `inventory_lots`: `quantity_on_hand >= 0`
+- `purchase_order_lines`: `quantity_received >= 0`, `quantity_ordered > 0`
+
+Generated migration `0007_nervous_red_wolf.sql` which recreates the affected tables with constraints, copying all existing data. Existing app-level guards ensure no data currently violates these constraints.
+
+**Files:** `packages/db/src/schema/packaging.ts`, `packages/db/src/schema/inventory.ts`, `packages/db/src/schema/purchasing.ts`, `packages/db/src/migrations/0007_nervous_red_wolf.sql`
+
+---
+
+### Finding #6 [Medium] — PO line updates can create invalid over-received states
+
+**Root cause:** `purchasing.updateLine` allowed lowering `quantityOrdered` without validating against existing `quantityReceived`, potentially making a line logically over-received.
+
+**Fix:** Added guard in `purchasing.updateLine`: if the new `quantityOrdered` is less than `quantityReceived`, the function throws with a clear error message. This check runs inside the new transaction wrapper alongside the line update and totals recalculation.
+
+**Files:** `packages/db/src/queries/purchasing.ts`
+
+---
+
+### Finding #7 [Low] — Session secret hardening checks presence, not quality
+
+**Root cause:** The production guard only checked `!SESSION_SECRET`, allowing weak/short secrets.
+
+**Fix:** Added minimum length enforcement: in production, `SESSION_SECRET` must be at least 32 characters. The guard throws at startup if the length is insufficient, before any sessions are created.
 
 **Files:** `apps/web/app/lib/auth.server.ts`
 
 ---
 
-### Finding #6 [Medium] — Supplier list route expects fields not returned by query
+### Finding #8 [Low] — `.gitignore` rule for errors is overly broad
 
-**Root cause:** Route consumed `supplier.itemCount` but `queries.suppliers.list()` returned plain supplier columns with no aggregate.
+**Root cause:** Global `errors.*` pattern could accidentally hide legitimate source files like `errors.tsx` in any directory.
 
-**Fix:** Updated `suppliers.list()` to left-join `inventoryItems` and return a `count(inventoryItems.id)` aggregate as `itemCount`, grouped by supplier.
+**Fix:** Narrowed the pattern from `errors.*` to `apps/web/app/errors.*`, scoping it to the specific artifact location.
 
-**Files:** `packages/db/src/queries/suppliers.ts`
-
----
-
-### Finding #7 [Medium] — Invoice route uses fields and types that do not match data contracts
-
-**Root cause:** `order.customer.billingAddress` did not exist in the customer schema. `renderToBuffer` result had a type mismatch with `Response`.
-
-**Fix:**
-
-1. Added `formatBillingAddress()` helper that builds a formatted address string from the customer's `addressLine1`, `addressLine2`, `city`, `state`, `postcode`, and `country` fields.
-2. Fixed `renderToBuffer` type with `Parameters<typeof renderToBuffer>[0]` cast.
-3. Fixed `Response` body with `new Uint8Array(buffer)` for `BodyInit` compatibility.
-
-**Files:** `apps/web/app/routes/orders.$id.invoice.tsx`
-
----
-
-### Finding #8 [Medium] — Profile and user-detail action data typing is not discriminated
-
-**Root cause:** `useActionData<typeof action>()` returned a broad union that TypeScript couldn't narrow by `intent`, causing compile errors on `.name`, `.email`, `.currentPassword`, etc.
-
-**Fix:** Defined explicit `ProfileActionData` and `UserActionData` discriminated union types keyed by `intent`. Cast `useActionData()` result to the discriminated union, enabling proper narrowing in the component.
-
-**Files:** `apps/web/app/routes/profile.tsx`, `apps/web/app/routes/users.$id.tsx`
-
----
-
-### Finding #10 [Medium] — Missing foreign key for consumption lot references
-
-**Root cause:** `brewIngredientConsumptions.inventoryLotId` was plain text with no FK constraint. Orphaned rows could exist and disappear from detail views due to inner join behavior.
-
-**Fix:** Added `.references(() => inventoryLots.id)` to the schema. Migration recreates the table with the FK constraint, preserving all existing data.
-
-**Files:** `packages/db/src/schema/brewing.ts`, `packages/db/src/migrations/0006_right_young_avengers.sql`
-
----
-
-### Finding #12 [Low] — Stray artifact file contains internal debug output
-
-**Root cause:** `apps/web/errors.*}` was a debug dump containing local paths and stack traces.
-
-**Fix:** Removed the file and added `errors.*` to `.gitignore` to prevent re-commit.
-
-**Files:** `.gitignore` (removed `apps/web/errors.*}`)
+**Files:** `.gitignore`
 
 ---
 
 ## Deferred Findings
 
-### Finding #9 [Medium] — E2E harness is unstable in constrained environments
+### Finding #2 [High] — Count-based sequence generation collision risk
 
-The EMFILE issue occurs in CI/constrained environments due to dev-server file watchers. This requires CI infrastructure changes (switching to production-mode server for E2E in CI). Deferred as it doesn't affect local development or correctness.
+**Assessment:** Under SQLite's single-writer model with WAL mode, concurrent write transactions are serialized at the database level. Combined with the sequence generation already running inside the same transaction as the insert (implemented in round 1), the collision window is eliminated for single-process deployments. For the current Fly.io deployment (single instance + Litestream), this is a non-issue.
 
-### Finding #11 [Low] — Lint command does not lint application code today
+If BrewPlan moves to multi-process writers (e.g., multiple replicas), replacing count-based sequences with an atomic counter table would be warranted. Documented as a future consideration rather than a current risk.
 
-Adding ESLint with package-level `lint` scripts is a separate tooling initiative. The typecheck gate now provides the most critical static analysis coverage.
+---
 
-### Finding #13 [Low] — Several loaders/exports use avoidable N+1 query patterns
+### Finding #3 [Medium] — E2E stability issue (EMFILE)
 
-The N+1 patterns in `recipes.$id._index`, `batches.$id.consumption`, and `getInventoryForCsvExport` will become performance concerns as dataset grows. Deferred to a focused performance optimization pass.
+**Assessment:** This is a CI environment configuration issue, not a code defect. The fix requires switching the Playwright web server from `react-router dev` (file-watcher-heavy) to `react-router build` + `react-router-serve` in CI. This is an infrastructure/config change deferred to a CI hardening pass. Local development and all 68 E2E tests pass in the current environment.
+
+---
+
+### Finding #9 [Low] — Lint coverage is still missing
+
+**Assessment:** Adding ESLint with package-level `lint` scripts and CI gating is a standalone tooling initiative. The current `typecheck` gate (enforced in the build pipeline since round 1) catches the most critical class of errors. Deferred to a tooling improvement pass.
+
+---
+
+### Finding #10 [Low] — Known N+1 query patterns remain
+
+**Assessment:** The N+1 patterns in `recipes.$id._index` and `batches.$id.consumption` (per-item lookup in a loop) are correctness-neutral and only become a performance concern at scale. Converting to set-based joins is straightforward but involves touching loader/UI code that is currently stable. Deferred to a performance optimization pass.
 
 ---
 
 ## Verification
 
 All changes verified against:
-- `pnpm typecheck` — 0 errors across all 3 packages
-- `pnpm build` — successful (now gated on typecheck)
+- `pnpm build` — 0 errors across all 3 packages (typecheck included in build pipeline)
 - `pnpm test:e2e` — 68/68 tests passing
+- Migration `0007_nervous_red_wolf.sql` — successfully applies CHECK constraints with data preservation

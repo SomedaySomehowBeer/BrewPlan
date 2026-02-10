@@ -245,19 +245,23 @@ export function update(
 // ── Transition ───────────────────────────────────────
 
 export function transition(id: string, toStatus: BatchStatus) {
-  const batch = get(id);
-  if (!batch) throw new Error(`Brew batch ${id} not found`);
-
-  const currentStatus = batch.status as BatchStatus;
-  const allowedTransitions = BATCH_TRANSITIONS[currentStatus];
-
-  if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
-    throw new Error(
-      `Invalid transition from "${currentStatus}" to "${toStatus}"`
-    );
-  }
-
   return db.transaction((tx) => {
+    const batch = tx
+      .select()
+      .from(brewBatches)
+      .where(eq(brewBatches.id, id))
+      .get();
+    if (!batch) throw new Error(`Brew batch ${id} not found`);
+
+    const currentStatus = batch.status as BatchStatus;
+    const allowedTransitions = BATCH_TRANSITIONS[currentStatus];
+
+    if (!allowedTransitions || !allowedTransitions.includes(toStatus)) {
+      throw new Error(
+        `Invalid transition from "${currentStatus}" to "${toStatus}"`
+      );
+    }
+
     // ── Transition guards ──────────────────────────────
     if (currentStatus === "planned" && toStatus === "brewing") {
       const recipe = tx

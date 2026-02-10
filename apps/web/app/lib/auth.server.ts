@@ -3,8 +3,13 @@ import { queries } from "./db.server";
 import type { UserRole } from "@brewplan/shared";
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
-if (!SESSION_SECRET && process.env.NODE_ENV === "production") {
-  throw new Error("SESSION_SECRET must be set in production");
+if (process.env.NODE_ENV === "production") {
+  if (!SESSION_SECRET) {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
+  if (SESSION_SECRET.length < 32) {
+    throw new Error("SESSION_SECRET must be at least 32 characters in production");
+  }
 }
 const secret = SESSION_SECRET || "dev-secret-change-me";
 

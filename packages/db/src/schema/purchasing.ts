@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, check } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
 import { suppliers } from "./suppliers";
 import { inventoryItems } from "./inventory";
 
@@ -44,4 +45,7 @@ export const purchaseOrderLines = sqliteTable("purchase_order_lines", {
   unitCost: real("unit_cost").notNull(),
   lineTotal: real("line_total").notNull().default(0),
   notes: text("notes"),
-});
+}, (table) => [
+  check("pol_qty_received_nonneg", sql`${table.quantityReceived} >= 0`),
+  check("pol_qty_ordered_nonneg", sql`${table.quantityOrdered} > 0`),
+]);
