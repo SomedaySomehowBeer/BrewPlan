@@ -1,4 +1,4 @@
-import { Form, useLoaderData, useActionData, redirect } from "react-router";
+import { Form, Link, useLoaderData, useActionData, redirect } from "react-router";
 import type { Route } from "./+types/orders.$id.lines";
 import { requireUser, requireMutationAccess } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
@@ -16,7 +16,7 @@ import {
   TableHead,
   TableCell,
 } from "~/components/ui/table";
-import { Trash2 } from "lucide-react";
+import { ArrowLeft, Trash2 } from "lucide-react";
 import { formatNumber } from "~/lib/utils";
 
 const formatOptions = [
@@ -92,6 +92,14 @@ export default function OrderLines() {
 
   return (
     <div className="space-y-6">
+      <Link
+        to={`/orders/${order.id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground min-h-[44px]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Order
+      </Link>
+
       {/* Current Lines */}
       <Card>
         <CardHeader className="pb-2">

@@ -1,5 +1,6 @@
 import {
   Form,
+  Link,
   useLoaderData,
   useActionData,
   useNavigation,
@@ -22,7 +23,7 @@ import {
 } from "~/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { formatNumber } from "~/lib/utils";
-import { Trash2, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Plus } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
@@ -88,6 +89,14 @@ export default function PurchaseOrderLines() {
 
   return (
     <div className="space-y-6">
+      <Link
+        to={`/purchasing/${po.id}`}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground min-h-[44px]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Purchase Order
+      </Link>
+
       {/* Current Lines */}
       <Card>
         <CardHeader>
