@@ -49,3 +49,22 @@ test("transitions order from draft to confirmed", async ({ page }) => {
   await expect(page).toHaveURL(/\/orders\/.+/);
   await expect(main.getByText("Confirmed").first()).toBeVisible();
 });
+
+test("CSV export link is available on orders list", async ({ page }) => {
+  await page.goto("/orders");
+
+  const main = page.locator("main");
+  const csvLink = main.getByRole("link", { name: /CSV/ });
+  await expect(csvLink).toBeVisible();
+  await expect(csvLink).toHaveAttribute("href", "/orders/export");
+});
+
+test("invoice download button not shown for draft orders", async ({ page }) => {
+  await page.goto("/orders");
+
+  const main = page.locator("main");
+  await main.locator("table").getByRole("link", { name: /ORD-/ }).first().click();
+
+  // Draft order should not show download invoice button
+  await expect(main.getByRole("link", { name: /Download Invoice/ })).not.toBeVisible();
+});

@@ -8,7 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { UnitDisplay } from "~/components/shared/unit-display";
 import { EmptyState } from "~/components/shared/empty-state";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Plus, Package, AlertTriangle } from "lucide-react";
+import { Plus, Package, AlertTriangle, Download } from "lucide-react";
 import { InventoryCategory } from "@brewplan/shared";
 import type { InventoryCategory as InventoryCategoryType } from "@brewplan/shared";
 
@@ -70,12 +70,20 @@ export default function InventoryIndex() {
             </TabsList>
           </Tabs>
         </div>
-        <Button asChild className="shrink-0">
-          <Link to="/inventory/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Item
-          </Link>
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" asChild>
+            <a href="/inventory/export" download>
+              <Download className="mr-2 h-4 w-4" />
+              CSV
+            </a>
+          </Button>
+          <Button asChild>
+            <Link to="/inventory/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Item
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {items.length === 0 ? (

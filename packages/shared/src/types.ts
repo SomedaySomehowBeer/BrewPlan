@@ -366,6 +366,48 @@ export interface BreweryProfile {
   updatedAt: string;
 }
 
+// ── Brewfather Import ────────────────────────────────
+export interface BrewfatherIngredientImport {
+  name: string;
+  type: string;
+  amount: number;
+  unit: string;
+  use: string;
+  supplier: string | null;
+}
+
+export interface BrewfatherRecipeImport {
+  name: string;
+  style: string;
+  batchSizeLitres: number;
+  boilTimeMinutes: number;
+  targetOg: number | null;
+  targetFg: number | null;
+  targetAbv: number | null;
+  targetIbu: number | null;
+  targetColour: number | null;
+  carbonation: number | null;
+  notes: string | null;
+  fermentables: BrewfatherIngredientImport[];
+  hops: BrewfatherIngredientImport[];
+  yeasts: BrewfatherIngredientImport[];
+  miscs: BrewfatherIngredientImport[];
+  mashSteps: { name: string; temperature: number; duration: number }[];
+}
+
+// ── Production Summary ───────────────────────────────
+export interface ProductionSummary {
+  batchesCompleted: number;
+  totalVolumeLitres: number;
+  batchesInProgress: number;
+  avgBatchSizeLitres: number;
+  vesselUtilisation: {
+    vesselId: string;
+    vesselName: string;
+    batchCount: number;
+  }[];
+}
+
 // ── Planning ──────────────────────────────────────────
 export interface MaterialRequirement {
   inventoryItemId: string;

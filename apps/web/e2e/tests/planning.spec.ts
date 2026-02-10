@@ -30,3 +30,23 @@ test("navigates to customer demand", async ({ page }) => {
   await page.locator("main").getByText("Customer Demand").click();
   await expect(page).toHaveURL(/\/planning\/demand/);
 });
+
+test("navigates to production summary", async ({ page }) => {
+  await page.goto("/planning");
+
+  await page.locator("main").getByText("Production Summary").click();
+  await expect(page).toHaveURL(/\/planning\/summary/);
+});
+
+test("displays production summary KPI cards", async ({ page }) => {
+  await page.goto("/planning/summary");
+
+  const main = page.locator("main");
+  await expect(main.getByText("Batches Completed")).toBeVisible();
+  await expect(main.getByText("Total Volume")).toBeVisible();
+  await expect(main.getByText("Avg Batch Size")).toBeVisible();
+  await expect(main.getByText("In Progress")).toBeVisible();
+  await expect(
+    main.getByRole("heading", { name: "Vessel Utilisation" })
+  ).toBeVisible();
+});

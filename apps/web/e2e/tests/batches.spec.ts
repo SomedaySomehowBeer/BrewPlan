@@ -48,3 +48,12 @@ test("transitions a planned batch to brewing", async ({ page }) => {
   await expect(page).toHaveURL(/\/batches\/.+/);
   await expect(main.getByText("Brewing").first()).toBeVisible();
 });
+
+test("CSV export link is available on batches list", async ({ page }) => {
+  await page.goto("/batches");
+
+  const main = page.locator("main");
+  const csvLink = main.getByRole("link", { name: /CSV/ });
+  await expect(csvLink).toBeVisible();
+  await expect(csvLink).toHaveAttribute("href", "/batches/export");
+});

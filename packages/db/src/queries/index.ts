@@ -11,6 +11,8 @@ import * as customers from "./customers";
 import * as orders from "./orders";
 import * as quality from "./quality";
 import * as settings from "./settings";
+import * as reporting from "./reporting";
+import * as brewfatherImport from "./import";
 
 export const queries = {
   auth,
@@ -27,6 +29,8 @@ export const queries = {
   orders,
   quality,
   settings,
+  reporting,
+  brewfatherImport,
 };
 
 export {
@@ -43,4 +47,6 @@ export {
   orders,
   quality,
   settings,
+  reporting,
+  brewfatherImport,
 };

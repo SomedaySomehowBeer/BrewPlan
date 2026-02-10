@@ -13,6 +13,7 @@ import {
 } from "~/components/ui/table";
 import { StatusBadge } from "~/components/shared/status-badge";
 import { Button } from "~/components/ui/button";
+import { FileText } from "lucide-react";
 import { formatDate, formatNumber } from "~/lib/utils";
 
 const channelLabels: Record<string, string> = {
@@ -105,8 +106,16 @@ export default function OrderDetail() {
       {/* Invoice / Payment Info */}
       {(order.invoiceNumber || order.paidAt) && (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-base">Invoice & Payment</CardTitle>
+            {order.invoiceNumber && (
+              <Button asChild size="sm" variant="outline">
+                <a href={`/orders/${order.id}/invoice`} download>
+                  <FileText className="mr-2 h-4 w-4" />
+                  Download Invoice
+                </a>
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             {order.invoiceNumber && (

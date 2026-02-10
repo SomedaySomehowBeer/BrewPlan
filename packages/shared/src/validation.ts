@@ -373,6 +373,85 @@ export const orderTransitionSchema = z.object({
   toStatus: z.enum(orderStatusValues),
 });
 
+// ── Brewfather Import ───────────────────────────────
+
+export const brewfatherImportSchema = z.object({
+  name: z.string().min(1),
+  style: z.object({ name: z.string() }).optional(),
+  batchSize: z.number().positive().optional(),
+  boilTime: z.number().nonnegative().optional(),
+  og: z.number().positive().optional(),
+  fg: z.number().positive().optional(),
+  abv: z.number().nonnegative().optional(),
+  ibu: z.number().nonnegative().optional(),
+  color: z.number().nonnegative().optional(),
+  carbonation: z.number().nonnegative().optional(),
+  notes: z.string().nullable().optional(),
+  fermentables: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.string().optional(),
+        amount: z.number().optional(),
+        supplier: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  hops: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.string().optional(),
+        amount: z.number().optional(),
+        use: z.string().optional(),
+        time: z.number().nullable().optional(),
+        alpha: z.number().nullable().optional(),
+      })
+    )
+    .optional(),
+  yeasts: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.string().optional(),
+        amount: z.number().optional(),
+        unit: z.string().optional(),
+        laboratory: z.string().nullable().optional(),
+      })
+    )
+    .optional(),
+  miscs: z
+    .array(
+      z.object({
+        name: z.string(),
+        type: z.string().optional(),
+        amount: z.number().optional(),
+        unit: z.string().optional(),
+        use: z.string().optional(),
+      })
+    )
+    .optional(),
+  mash: z
+    .object({
+      steps: z
+        .array(
+          z.object({
+            name: z.string().optional(),
+            stepTemp: z.number().optional(),
+            stepTime: z.number().optional(),
+          })
+        )
+        .optional(),
+    })
+    .optional(),
+  equipment: z
+    .object({
+      batchSize: z.number().optional(),
+      boilTime: z.number().optional(),
+    })
+    .optional(),
+});
+
 // ── Quality Checks ──────────────────────────────────
 
 const qualityCheckTypeValues = [

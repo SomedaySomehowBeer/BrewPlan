@@ -18,9 +18,9 @@ test("filters recipes by status tab", async ({ page }) => {
   await main.getByRole("tab", { name: "Active" }).click();
   await expect(main.getByText("GF Pale Ale")).toBeVisible();
 
-  // Click Draft tab — should show empty state
+  // Click Draft tab — seed recipes should not appear (they are active)
   await main.getByRole("tab", { name: "Draft" }).click();
-  await expect(main.getByText("No draft recipes yet")).toBeVisible();
+  await expect(main.getByText("GF Pale Ale")).not.toBeVisible();
 });
 
 test("creates a new recipe", async ({ page }) => {

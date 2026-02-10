@@ -7,6 +7,7 @@ import {
   customers,
   recipes,
   finishedGoodsStock,
+  breweryProfile,
 } from "../schema/index";
 import {
   ORDER_TRANSITIONS,
@@ -518,4 +519,15 @@ export function transition(id: string, toStatus: OrderStatus) {
   db.update(orders).set(updates).where(eq(orders.id, id)).run();
 
   return get(id)!;
+}
+
+// ── Get for Invoice ─────────────────────────────────
+
+export function getForInvoice(id: string) {
+  const orderWithLines = getWithLines(id);
+  if (!orderWithLines) return null;
+
+  const profile = db.select().from(breweryProfile).get() ?? null;
+
+  return { ...orderWithLines, breweryProfile: profile };
 }

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   ShoppingCart,
   Truck,
+  BarChart3,
 } from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -199,6 +200,19 @@ export default function PlanningIndex() {
                 </p>
               </div>
               <ArrowRight className="h-5 w-5 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/planning/summary">
+          <Card className="hover:border-primary/50 transition-colors">
+            <CardContent className="flex items-center justify-between p-4 min-h-[64px]">
+              <div>
+                <h3 className="font-medium">Production Summary</h3>
+                <p className="text-sm text-muted-foreground">
+                  KPIs, volumes, and vessel utilisation
+                </p>
+              </div>
+              <BarChart3 className="h-5 w-5 text-muted-foreground" />
             </CardContent>
           </Card>
         </Link>

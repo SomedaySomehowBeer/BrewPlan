@@ -6,7 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { StatusBadge } from "~/components/shared/status-badge";
 import { EmptyState } from "~/components/shared/empty-state";
-import { Plus, Calendar } from "lucide-react";
+import { Plus, Calendar, Download } from "lucide-react";
 import { formatDate } from "~/lib/utils";
 
 const ACTIVE_STATUSES = [
@@ -72,12 +72,20 @@ export default function BatchesIndex() {
             </Button>
           ))}
         </div>
-        <Button asChild>
-          <Link to="/batches/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Batch
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href="/batches/export" download>
+              <Download className="mr-2 h-4 w-4" />
+              CSV
+            </a>
+          </Button>
+          <Button asChild>
+            <Link to="/batches/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Batch
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {batches.length === 0 ? (
