@@ -1,0 +1,23 @@
+app = "brewplan"
+primary_region = "syd"
+
+[build]
+
+[env]
+  DATABASE_URL = "/data/brewplan.db"
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[mounts]
+  source = "brewplan_data"
+  destination = "/data"

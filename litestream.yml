@@ -1,0 +1,10 @@
+dbs:
+  - path: ${DATABASE_URL}
+    replicas:
+      - type: s3
+        endpoint: ${LITESTREAM_ENDPOINT}
+        bucket: ${LITESTREAM_BUCKET}
+        path: brewplan.db
+        access-key-id: ${AWS_ACCESS_KEY_ID}
+        secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+        sync-interval: 1s

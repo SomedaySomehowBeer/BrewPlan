@@ -637,20 +637,9 @@ pnpm test:e2e:headed      # Run tests with visible browser
 
 - **Phase 1** (Core Brewing Loop): Auth, recipes, inventory, brew batches, vessels, materials planning. All implemented and tested.
 - **Phase 2** (Commercial Operations): Packaging, suppliers, purchasing, customers, orders, demand/packaging/purchasing planning views. All implemented and tested.
-- **E2E Tests**: 38 tests across 12 spec files covering all modules.
-
-### Phase 3 — Future
-
-From DOMAIN.md, the following remain unimplemented:
-
-- **Quality Checks** — QC checkpoints (pH, DO, micro, sensory) attached to brew batches
-- **Settings** — Brewery profile, units, currency, tax config
-- **Recipe Versioning** — Clone + parent_recipe_id chain
-- **Recipe Process Steps** — Documenting process beyond ingredients
-- **Brewfather Import** — JSON export → Recipe + RecipeIngredient mapping
-- **Reporting & Export** — CSV, invoice PDFs
-- **Production Summary** — Historical analytics (Planning view 9.6)
-- **Multi-user / Roles** — Registration, password reset, role-based access
+- **Phase 3** (Quality, Settings, Versioning, Import, Export, RBAC): Quality checks, brewery settings, recipe versioning + process steps, Brewfather import, CSV exports, invoice PDFs, production summary, multi-user RBAC. All implemented and tested.
+- **Phase 4** (Deployment Readiness): Enhanced dashboard (orders pending, revenue, upcoming deliveries, quick links), reporting aggregates (top products, top customers, revenue by period, pending deliveries), batch `planned → fermenting` shortcut transition, Dockerfile, fly.toml, Litestream config, startup script, deployment docs.
+- **E2E Tests**: 68 tests across 16 spec files covering all modules.
 
 ---
 

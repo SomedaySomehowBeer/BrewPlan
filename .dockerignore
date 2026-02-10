@@ -1,0 +1,17 @@
+node_modules
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+test-results
+.auth
+e2e
+.git
+.github
+.turbo
+docs
+*.md
+!package.json
