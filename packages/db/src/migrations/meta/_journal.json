@@ -57,6 +57,13 @@
       "when": 1770704478887,
       "tag": "0007_nervous_red_wolf",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1770705498118,
+      "tag": "0008_mushy_mephistopheles",
+      "breakpoints": true
     }
   ]
 }

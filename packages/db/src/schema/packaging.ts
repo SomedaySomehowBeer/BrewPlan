@@ -63,4 +63,5 @@ export const finishedGoodsStock = sqliteTable("finished_goods_stock", {
 }, (table) => [
   check("fg_qty_on_hand_nonneg", sql`${table.quantityOnHand} >= 0`),
   check("fg_qty_reserved_nonneg", sql`${table.quantityReserved} >= 0`),
+  check("fg_qty_reserved_lte_on_hand", sql`${table.quantityReserved} <= ${table.quantityOnHand}`),
 ]);

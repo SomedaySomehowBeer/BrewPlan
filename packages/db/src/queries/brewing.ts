@@ -207,7 +207,7 @@ export function create(data: {
       })
       .run();
 
-    return get(id)!;
+    return tx.select().from(brewBatches).where(eq(brewBatches.id, id)).get()!;
   });
 }
 
@@ -476,7 +476,7 @@ export function transition(id: string, toStatus: BatchStatus) {
 
     tx.update(brewBatches).set(updates).where(eq(brewBatches.id, id)).run();
 
-    return get(id)!;
+    return tx.select().from(brewBatches).where(eq(brewBatches.id, id)).get()!;
   });
 }
 

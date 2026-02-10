@@ -141,7 +141,7 @@ export function create(data: {
       })
       .run();
 
-    return get(id)!;
+    return tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, id)).get()!;
   });
 }
 
@@ -344,7 +344,7 @@ export function transition(id: string, toStatus: PurchaseOrderStatus) {
 
     tx.update(purchaseOrders).set(updates).where(eq(purchaseOrders.id, id)).run();
 
-    return get(id)!;
+    return tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, id)).get()!;
   });
 }
 

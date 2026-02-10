@@ -48,4 +48,5 @@ export const purchaseOrderLines = sqliteTable("purchase_order_lines", {
 }, (table) => [
   check("pol_qty_received_nonneg", sql`${table.quantityReceived} >= 0`),
   check("pol_qty_ordered_nonneg", sql`${table.quantityOrdered} > 0`),
+  check("pol_qty_received_lte_ordered", sql`${table.quantityReceived} <= ${table.quantityOrdered}`),
 ]);
