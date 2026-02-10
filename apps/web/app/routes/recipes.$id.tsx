@@ -10,7 +10,7 @@ import { requireUser } from "~/lib/auth.server";
 import { queries } from "~/lib/db.server";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/shared/status-badge";
-import { ArrowLeft, Pencil, Archive, CheckCircle, Plus } from "lucide-react";
+import { ArrowLeft, Pencil, Archive, CheckCircle, Plus, Copy } from "lucide-react";
 import { redirect } from "react-router";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -47,6 +47,11 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   if (intent === "create-batch") {
     return redirect(`/batches/new?recipeId=${params.id}`);
+  }
+
+  if (intent === "clone") {
+    const cloned = queries.recipes.cloneAsNewVersion(params.id);
+    return redirect(`/recipes/${cloned.id}`);
   }
 
   return { ok: false };
@@ -126,6 +131,19 @@ export default function RecipeLayout() {
               </>
             )}
 
+            <Form method="post">
+              <input type="hidden" name="intent" value="clone" />
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                disabled={isSubmitting}
+              >
+                <Copy className="mr-2 h-4 w-4" />
+                Clone as New Version
+              </Button>
+            </Form>
+
             {recipe.status === "archived" && (
               <Form method="post">
                 <input type="hidden" name="intent" value="reactivate" />
@@ -156,6 +174,18 @@ export default function RecipeLayout() {
             className="inline-flex min-h-[44px] items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground [&.active]:border-primary [&.active]:text-foreground"
           >
             Ingredients
+          </Link>
+          <Link
+            to={`/recipes/${recipe.id}/process`}
+            className="inline-flex min-h-[44px] items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground [&.active]:border-primary [&.active]:text-foreground"
+          >
+            Process
+          </Link>
+          <Link
+            to={`/recipes/${recipe.id}/versions`}
+            className="inline-flex min-h-[44px] items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted-foreground hover:text-foreground [&.active]:border-primary [&.active]:text-foreground"
+          >
+            Versions
           </Link>
         </div>
       </div>

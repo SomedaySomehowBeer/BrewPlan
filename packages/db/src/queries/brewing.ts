@@ -10,6 +10,7 @@ import {
   inventoryItems,
   vessels,
   packagingRuns,
+  qualityChecks,
 } from "../schema/index";
 import { BATCH_TRANSITIONS, type BatchStatus } from "@brewplan/shared";
 import { recordMovement } from "./inventory";
@@ -118,12 +119,20 @@ export function getWithDetails(id: string) {
         .get() ?? null;
   }
 
+  const qcChecks = db
+    .select()
+    .from(qualityChecks)
+    .where(eq(qualityChecks.brewBatchId, id))
+    .orderBy(desc(qualityChecks.checkedAt))
+    .all();
+
   return {
     ...batch,
     recipe: recipe ?? null,
     consumptions,
     fermentationLog,
     vessel,
+    qualityChecks: qcChecks,
   };
 }
 

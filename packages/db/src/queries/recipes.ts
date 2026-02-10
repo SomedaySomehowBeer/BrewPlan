@@ -1,7 +1,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { v4 as uuid } from "uuid";
 import { db } from "../client";
-import { recipes, recipeIngredients } from "../schema/index";
+import { recipes, recipeIngredients, recipeProcessSteps } from "../schema/index";
 import { inventoryItems } from "../schema/index";
 import type { RecipeStatus } from "@brewplan/shared";
 
@@ -283,6 +283,228 @@ export function removeIngredient(id: string) {
     db.update(recipes)
       .set({ updatedAt: new Date().toISOString() })
       .where(eq(recipes.id, ingredient.recipeId))
+      .run();
+  }
+}
+
+// ── Clone / Versioning ──────────────────────────────
+
+export function cloneAsNewVersion(id: string) {
+  const original = get(id);
+  if (!original) throw new Error(`Recipe ${id} not found`);
+
+  // Find the highest version in this recipe's lineage
+  const rootId = getVersionRoot(id);
+  const allVersions = db
+    .select({ version: recipes.version })
+    .from(recipes)
+    .where(
+      sql`${recipes.id} = ${rootId} OR ${recipes.parentRecipeId} = ${rootId}`
+    )
+    .all();
+  // Also check recipes that chain through parentRecipeId to any in the lineage
+  const maxVersion = allVersions.reduce(
+    (max, r) => Math.max(max, r.version),
+    original.version
+  );
+
+  const newRecipe = create({
+    name: original.name,
+    style: original.style,
+    description: original.description,
+    batchSizeLitres: original.batchSizeLitres,
+    boilDurationMinutes: original.boilDurationMinutes,
+    mashTempCelsius: original.mashTempCelsius,
+    targetOg: original.targetOg,
+    targetFg: original.targetFg,
+    targetAbv: original.targetAbv,
+    targetIbu: original.targetIbu,
+    targetSrm: original.targetSrm,
+    targetCo2Volumes: original.targetCo2Volumes,
+    estimatedBrewDays: original.estimatedBrewDays,
+    estimatedFermentationDays: original.estimatedFermentationDays,
+    estimatedConditioningDays: original.estimatedConditioningDays,
+    notes: original.notes,
+    parentRecipeId: id,
+    version: maxVersion + 1,
+  });
+
+  // Clone ingredients
+  const ingredients = db
+    .select()
+    .from(recipeIngredients)
+    .where(eq(recipeIngredients.recipeId, id))
+    .all();
+  for (const ing of ingredients) {
+    addIngredient(newRecipe.id, {
+      inventoryItemId: ing.inventoryItemId,
+      quantity: ing.quantity,
+      unit: ing.unit,
+      usageStage: ing.usageStage,
+      useTimeMinutes: ing.useTimeMinutes,
+      sortOrder: ing.sortOrder,
+      notes: ing.notes,
+    });
+  }
+
+  // Clone process steps
+  const steps = getProcessSteps(id);
+  for (const step of steps) {
+    addProcessStep(newRecipe.id, {
+      stage: step.stage,
+      instruction: step.instruction,
+      durationMinutes: step.durationMinutes,
+      temperatureCelsius: step.temperatureCelsius,
+      sortOrder: step.sortOrder,
+    });
+  }
+
+  return newRecipe;
+}
+
+function getVersionRoot(id: string): string {
+  const recipe = get(id);
+  if (!recipe) return id;
+  if (recipe.parentRecipeId) return getVersionRoot(recipe.parentRecipeId);
+  return id;
+}
+
+export function getVersionHistory(id: string) {
+  // Walk up to find root
+  const rootId = getVersionRoot(id);
+
+  // Find all recipes in the chain: root + all descendants
+  const versions = db
+    .select({
+      id: recipes.id,
+      name: recipes.name,
+      version: recipes.version,
+      status: recipes.status,
+      parentRecipeId: recipes.parentRecipeId,
+      createdAt: recipes.createdAt,
+    })
+    .from(recipes)
+    .where(
+      sql`${recipes.id} = ${rootId} OR ${recipes.parentRecipeId} IS NOT NULL`
+    )
+    .orderBy(recipes.version)
+    .all();
+
+  // Filter to only versions in this lineage by walking descendants
+  const lineageIds = new Set<string>([rootId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const v of versions) {
+      if (v.parentRecipeId && lineageIds.has(v.parentRecipeId) && !lineageIds.has(v.id)) {
+        lineageIds.add(v.id);
+        changed = true;
+      }
+    }
+  }
+
+  return versions.filter((v) => lineageIds.has(v.id));
+}
+
+// ── Process Steps ───────────────────────────────────
+
+export function getProcessSteps(recipeId: string) {
+  return db
+    .select()
+    .from(recipeProcessSteps)
+    .where(eq(recipeProcessSteps.recipeId, recipeId))
+    .orderBy(recipeProcessSteps.sortOrder)
+    .all();
+}
+
+export function addProcessStep(
+  recipeId: string,
+  data: {
+    stage: string;
+    instruction: string;
+    durationMinutes?: number | null;
+    temperatureCelsius?: number | null;
+    sortOrder?: number;
+  }
+) {
+  const id = uuid();
+
+  db.insert(recipeProcessSteps)
+    .values({
+      id,
+      recipeId,
+      stage: data.stage as
+        | "mash"
+        | "boil"
+        | "whirlpool"
+        | "ferment"
+        | "condition"
+        | "package",
+      instruction: data.instruction,
+      durationMinutes: data.durationMinutes ?? null,
+      temperatureCelsius: data.temperatureCelsius ?? null,
+      sortOrder: data.sortOrder ?? 0,
+    })
+    .run();
+
+  // Update recipe updatedAt
+  db.update(recipes)
+    .set({ updatedAt: new Date().toISOString() })
+    .where(eq(recipes.id, recipeId))
+    .run();
+
+  return db
+    .select()
+    .from(recipeProcessSteps)
+    .where(eq(recipeProcessSteps.id, id))
+    .get()!;
+}
+
+export function updateProcessStep(
+  id: string,
+  data: Partial<{
+    stage: string;
+    instruction: string;
+    durationMinutes: number | null;
+    temperatureCelsius: number | null;
+    sortOrder: number;
+  }>
+) {
+  db.update(recipeProcessSteps)
+    .set(data as Record<string, unknown>)
+    .where(eq(recipeProcessSteps.id, id))
+    .run();
+
+  const step = db
+    .select()
+    .from(recipeProcessSteps)
+    .where(eq(recipeProcessSteps.id, id))
+    .get()!;
+
+  // Update recipe updatedAt
+  db.update(recipes)
+    .set({ updatedAt: new Date().toISOString() })
+    .where(eq(recipes.id, step.recipeId))
+    .run();
+
+  return step;
+}
+
+export function removeProcessStep(id: string) {
+  const step = db
+    .select()
+    .from(recipeProcessSteps)
+    .where(eq(recipeProcessSteps.id, id))
+    .get();
+
+  db.delete(recipeProcessSteps)
+    .where(eq(recipeProcessSteps.id, id))
+    .run();
+
+  if (step) {
+    db.update(recipes)
+      .set({ updatedAt: new Date().toISOString() })
+      .where(eq(recipes.id, step.recipeId))
       .run();
   }
 }

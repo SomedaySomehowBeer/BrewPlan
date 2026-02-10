@@ -33,6 +33,10 @@ const statusColors: Record<string, "default" | "secondary" | "destructive" | "ou
   delivered: "success",
   invoiced: "default",
   paid: "success",
+  // Quality check results
+  pass: "success",
+  fail: "destructive",
+  pending: "warning",
   // Customer types
   venue: "default",
   bottle_shop: "secondary",
@@ -71,6 +75,15 @@ const statusLabels: Record<string, string> = {
   delivered: "Delivered",
   invoiced: "Invoiced",
   paid: "Paid",
+  // Quality check results
+  pass: "Pass",
+  fail: "Fail",
+  pending: "Pending",
+  // Quality check types
+  pre_ferment: "Pre-Ferment",
+  mid_ferment: "Mid-Ferment",
+  post_ferment: "Post-Ferment",
+  pre_package: "Pre-Package",
   // Customer types
   venue: "Venue",
   bottle_shop: "Bottle Shop",

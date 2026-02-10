@@ -16,7 +16,7 @@ import { StatusBadge } from "~/components/shared/status-badge";
 import { UnitDisplay } from "~/components/shared/unit-display";
 import { Button } from "~/components/ui/button";
 import { formatDate, formatNumber } from "~/lib/utils";
-import { Beaker, Thermometer, FlaskConical, Plus, Package } from "lucide-react";
+import { Beaker, Thermometer, FlaskConical, Plus, Package, ClipboardCheck } from "lucide-react";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   await requireUser(request);
@@ -41,13 +41,21 @@ export default function BatchDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Prominent fermentation entry */}
-      <Link to={`/batches/${batch.id}/fermentation`}>
-        <Button size="lg" className="w-full min-h-[56px] text-base">
-          <Plus className="mr-2 h-5 w-5" />
-          Log Fermentation Reading
-        </Button>
-      </Link>
+      {/* Prominent action buttons */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Link to={`/batches/${batch.id}/fermentation`} className="flex-1">
+          <Button size="lg" className="w-full min-h-[56px] text-base">
+            <Plus className="mr-2 h-5 w-5" />
+            Log Fermentation Reading
+          </Button>
+        </Link>
+        <Link to={`/batches/${batch.id}/quality`} className="flex-1">
+          <Button size="lg" variant="outline" className="w-full min-h-[56px] text-base">
+            <ClipboardCheck className="mr-2 h-5 w-5" />
+            Log Quality Check
+          </Button>
+        </Link>
+      </div>
 
       {/* Packaging link - show when ready_to_package or later */}
       {["ready_to_package", "packaged", "completed"].includes(batch.status) && (

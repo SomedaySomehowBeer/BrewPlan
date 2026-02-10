@@ -153,6 +153,47 @@ export const OrderChannel = {
 export type OrderChannel =
   (typeof OrderChannel)[keyof typeof OrderChannel];
 
+// Quality check types
+export const QualityCheckType = {
+  PRE_FERMENT: "pre_ferment",
+  MID_FERMENT: "mid_ferment",
+  POST_FERMENT: "post_ferment",
+  PRE_PACKAGE: "pre_package",
+  PACKAGED: "packaged",
+  OTHER: "other",
+} as const;
+export type QualityCheckType =
+  (typeof QualityCheckType)[keyof typeof QualityCheckType];
+
+// Quality check results
+export const QualityCheckResult = {
+  PASS: "pass",
+  FAIL: "fail",
+  PENDING: "pending",
+} as const;
+export type QualityCheckResult =
+  (typeof QualityCheckResult)[keyof typeof QualityCheckResult];
+
+// Recipe process step stages
+export const ProcessStepStage = {
+  MASH: "mash",
+  BOIL: "boil",
+  WHIRLPOOL: "whirlpool",
+  FERMENT: "ferment",
+  CONDITION: "condition",
+  PACKAGE: "package",
+} as const;
+export type ProcessStepStage =
+  (typeof ProcessStepStage)[keyof typeof ProcessStepStage];
+
+// User roles (defined now for 3c, used in auth middleware)
+export const UserRole = {
+  ADMIN: "admin",
+  BREWER: "brewer",
+  VIEWER: "viewer",
+} as const;
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
 // Valid batch transitions
 export const BATCH_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
   [BatchStatus.PLANNED]: [BatchStatus.BREWING, BatchStatus.CANCELLED],

@@ -22,6 +22,7 @@ import {
   ShoppingCart,
   Truck,
   FileText,
+  Settings,
 } from "lucide-react";
 import { useState } from "react";
 import "~/app.css";
@@ -57,6 +58,12 @@ const navGroups = [
     label: "Planning",
     items: [
       { to: "/planning", label: "Planning", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Admin",
+    items: [
+      { to: "/settings", label: "Settings", icon: Settings },
     ],
   },
 ];

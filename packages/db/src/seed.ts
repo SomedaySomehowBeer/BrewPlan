@@ -533,4 +533,94 @@ if (eagleBarId && paleAleId) {
   }
 }
 
+// ── Seed Brewery Profile ──────────────────────────────
+const existingProfile = queries.settings.getProfile();
+if (!existingProfile) {
+  queries.settings.updateProfile({
+    name: "Someday Somehow Brewing",
+    address: "42 Brewers Lane, Vasse WA 6280",
+    phone: "08 9756 7890",
+    email: "brew@somedaysomehow.com.au",
+    website: "https://somedaysomehow.com.au",
+    abn: "12 345 678 901",
+    liquorLicenceNumber: "LIQ-2025-0042",
+    defaultCurrency: "AUD",
+    defaultBatchPrefix: "BP",
+    defaultOrderPrefix: "ORD",
+    defaultPoPrefix: "PO",
+    invoiceFooter: "Payment: BSB 036-042, Acc 123456. Terms: Net 14 days.",
+  });
+  console.log("Created brewery profile: Someday Somehow Brewing");
+} else {
+  console.log("Brewery profile exists.");
+}
+
+// ── Seed Sample Quality Checks ───────────────────────
+const allBatches = db.select().from(schema.brewBatches).all();
+const fermentingBatch = allBatches.find((b) => b.status === "fermenting");
+if (fermentingBatch) {
+  const existingQC = queries.quality.listByBatch(fermentingBatch.id);
+  if (existingQC.length === 0) {
+    queries.quality.create({
+      brewBatchId: fermentingBatch.id,
+      checkType: "pre_ferment",
+      checkedBy: name,
+      ph: 5.3,
+      notes: "Pre-ferment check — pH within range, good wort clarity.",
+      result: "pass",
+    });
+    queries.quality.create({
+      brewBatchId: fermentingBatch.id,
+      checkType: "mid_ferment",
+      checkedBy: name,
+      ph: 4.2,
+      dissolvedOxygen: 0.03,
+      notes: "Mid-ferment check — healthy fermentation activity.",
+      result: "pass",
+    });
+    console.log(`Created 2 quality checks for batch ${fermentingBatch.batchNumber}`);
+  } else {
+    console.log("Quality checks already exist, skipping.");
+  }
+}
+
+// ── Seed Sample Process Steps ────────────────────────
+const paleAleRecipeId = recipeIds["GF Pale Ale"];
+if (paleAleRecipeId) {
+  const existingSteps = queries.recipes.getProcessSteps(paleAleRecipeId);
+  if (existingSteps.length === 0) {
+    queries.recipes.addProcessStep(paleAleRecipeId, {
+      stage: "mash",
+      instruction: "Single infusion mash at 65°C for 60 minutes. Adjust pH to 5.2-5.4 with lactic acid if needed.",
+      durationMinutes: 60,
+      temperatureCelsius: 65,
+      sortOrder: 0,
+    });
+    queries.recipes.addProcessStep(paleAleRecipeId, {
+      stage: "boil",
+      instruction: "60-minute boil. Add bittering hops at start, aroma hops at 15 minutes remaining.",
+      durationMinutes: 60,
+      temperatureCelsius: 100,
+      sortOrder: 1,
+    });
+    queries.recipes.addProcessStep(paleAleRecipeId, {
+      stage: "ferment",
+      instruction: "Cool to 18°C, pitch yeast and Clarity Ferm. Ferment at 18-20°C for 7-10 days.",
+      durationMinutes: null,
+      temperatureCelsius: 18,
+      sortOrder: 2,
+    });
+    queries.recipes.addProcessStep(paleAleRecipeId, {
+      stage: "ferment",
+      instruction: "Dry hop at day 5, leave for 3 days. Cold crash at 2°C for 48 hours.",
+      durationMinutes: null,
+      temperatureCelsius: 2,
+      sortOrder: 3,
+    });
+    console.log("Created 4 process steps for GF Pale Ale");
+  } else {
+    console.log("Process steps already exist, skipping.");
+  }
+}
+
 console.log("\nSeed complete!");

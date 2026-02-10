@@ -372,3 +372,69 @@ export const orderLineSchema = z.object({
 export const orderTransitionSchema = z.object({
   toStatus: z.enum(orderStatusValues),
 });
+
+// ── Quality Checks ──────────────────────────────────
+
+const qualityCheckTypeValues = [
+  "pre_ferment",
+  "mid_ferment",
+  "post_ferment",
+  "pre_package",
+  "packaged",
+  "other",
+] as const;
+
+const qualityCheckResultValues = ["pass", "fail", "pending"] as const;
+
+export const createQualityCheckSchema = z.object({
+  brewBatchId: z.string().uuid(),
+  checkType: z.enum(qualityCheckTypeValues),
+  checkedBy: z.string().max(200).nullable().optional(),
+  ph: z.coerce.number().positive().nullable().optional(),
+  dissolvedOxygen: z.coerce.number().nonnegative().nullable().optional(),
+  turbidity: z.coerce.number().nonnegative().nullable().optional(),
+  colourSrm: z.coerce.number().nonnegative().nullable().optional(),
+  abv: z.coerce.number().nonnegative().nullable().optional(),
+  co2Volumes: z.coerce.number().nonnegative().nullable().optional(),
+  sensoryNotes: z.string().max(2000).nullable().optional(),
+  microbiological: z.string().max(2000).nullable().optional(),
+  result: z.enum(qualityCheckResultValues).default("pending"),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+// ── Recipe Process Steps ────────────────────────────
+
+const processStepStageValues = [
+  "mash",
+  "boil",
+  "whirlpool",
+  "ferment",
+  "condition",
+  "package",
+] as const;
+
+export const recipeProcessStepSchema = z.object({
+  stage: z.enum(processStepStageValues),
+  instruction: z.string().min(1, "Instruction is required").max(2000),
+  durationMinutes: z.coerce.number().int().nonnegative().nullable().optional(),
+  temperatureCelsius: z.coerce.number().nullable().optional(),
+  sortOrder: z.coerce.number().int().nonnegative().default(0),
+});
+
+// ── Settings ────────────────────────────────────────
+
+export const updateBreweryProfileSchema = z.object({
+  name: z.string().min(1, "Brewery name is required").max(200),
+  logoUrl: z.string().max(500).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  phone: z.string().max(50).nullable().optional(),
+  email: z.string().email().nullable().optional().or(z.literal("")),
+  website: z.string().max(200).nullable().optional(),
+  abn: z.string().max(50).nullable().optional(),
+  liquorLicenceNumber: z.string().max(100).nullable().optional(),
+  defaultCurrency: z.string().max(10).default("AUD"),
+  defaultBatchPrefix: z.string().max(10).default("BP"),
+  defaultOrderPrefix: z.string().max(10).default("ORD"),
+  defaultPoPrefix: z.string().max(10).default("PO"),
+  invoiceFooter: z.string().max(2000).nullable().optional(),
+});

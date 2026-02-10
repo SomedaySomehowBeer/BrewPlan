@@ -47,3 +47,17 @@ export const recipeIngredients = sqliteTable("recipe_ingredients", {
   sortOrder: integer("sort_order").notNull().default(0),
   notes: text("notes"),
 });
+
+export const recipeProcessSteps = sqliteTable("recipe_process_steps", {
+  id: text("id").primaryKey(),
+  recipeId: text("recipe_id")
+    .notNull()
+    .references(() => recipes.id, { onDelete: "cascade" }),
+  stage: text("stage", {
+    enum: ["mash", "boil", "whirlpool", "ferment", "condition", "package"],
+  }).notNull(),
+  instruction: text("instruction").notNull(),
+  durationMinutes: integer("duration_minutes"),
+  temperatureCelsius: real("temperature_celsius"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});

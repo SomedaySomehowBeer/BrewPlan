@@ -9,6 +9,8 @@ import * as suppliers from "./suppliers";
 import * as purchasing from "./purchasing";
 import * as customers from "./customers";
 import * as orders from "./orders";
+import * as quality from "./quality";
+import * as settings from "./settings";
 
 export const queries = {
   auth,
@@ -23,6 +25,8 @@ export const queries = {
   purchasing,
   customers,
   orders,
+  quality,
+  settings,
 };
 
 export {
@@ -37,4 +41,6 @@ export {
   purchasing,
   customers,
   orders,
+  quality,
+  settings,
 };

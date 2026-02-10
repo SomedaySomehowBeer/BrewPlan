@@ -8,3 +8,5 @@ export * from "./suppliers";
 export * from "./purchasing";
 export * from "./customers";
 export * from "./orders";
+export * from "./quality";
+export * from "./settings";

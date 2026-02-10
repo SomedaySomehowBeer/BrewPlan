@@ -12,6 +12,9 @@ import type {
   CustomerType,
   OrderStatus,
   OrderChannel,
+  QualityCheckType,
+  QualityCheckResult,
+  ProcessStepStage,
 } from "./enums";
 
 // ── Auth ──────────────────────────────────────────────
@@ -310,6 +313,57 @@ export interface OrderLine {
   unitPrice: number;
   lineTotal: number;
   notes: string | null;
+}
+
+// ── Quality ──────────────────────────────────────────
+export interface QualityCheck {
+  id: string;
+  brewBatchId: string;
+  checkType: QualityCheckType;
+  checkedAt: string;
+  checkedBy: string | null;
+  ph: number | null;
+  dissolvedOxygen: number | null;
+  turbidity: number | null;
+  colourSrm: number | null;
+  abv: number | null;
+  co2Volumes: number | null;
+  sensoryNotes: string | null;
+  microbiological: string | null;
+  result: QualityCheckResult;
+  notes: string | null;
+  createdAt: string;
+}
+
+// ── Recipe Process Steps ─────────────────────────────
+export interface RecipeProcessStep {
+  id: string;
+  recipeId: string;
+  stage: ProcessStepStage;
+  instruction: string;
+  durationMinutes: number | null;
+  temperatureCelsius: number | null;
+  sortOrder: number;
+}
+
+// ── Settings ─────────────────────────────────────────
+export interface BreweryProfile {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  abn: string | null;
+  liquorLicenceNumber: string | null;
+  defaultCurrency: string;
+  defaultBatchPrefix: string;
+  defaultOrderPrefix: string;
+  defaultPoPrefix: string;
+  invoiceFooter: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ── Planning ──────────────────────────────────────────
