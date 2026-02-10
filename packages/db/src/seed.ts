@@ -326,6 +326,40 @@ if (paleAleId && fv1Id) {
       });
       console.log(`Created batch: ${batch2.batchNumber} (fermenting, with log entries)`);
     }
+
+    // A planned batch ready for the planned→fermenting shortcut
+    const goldenLagerId = recipeIds["GF Golden Lager"];
+    const fv3Id = vesselIds["FV3"];
+    if (goldenLagerId && fv3Id) {
+      const batch3 = queries.batches.create({
+        recipeId: goldenLagerId,
+        plannedDate: "2026-02-20",
+        batchSizeLitres: 50,
+        vesselId: fv3Id,
+        notes: "Same-day brew and transfer test",
+      });
+      // Set actualOg (required for shortcut guard)
+      queries.batches.update(batch3.id, {
+        actualOg: 1.048,
+        actualVolumeLitres: 49,
+      });
+      // Add a consumption record (required for shortcut guard)
+      const lagerRecipe = queries.recipes.getWithIngredients(goldenLagerId);
+      if (lagerRecipe && lagerRecipe.ingredients.length > 0) {
+        const lots = db.select().from(schema.inventoryLots).all();
+        if (lots.length > 0) {
+          queries.batches.recordConsumption(batch3.id, {
+            recipeIngredientId: lagerRecipe.ingredients[0].id,
+            inventoryLotId: lots[0].id,
+            plannedQuantity: 5.5,
+            actualQuantity: 5.5,
+            unit: "kg",
+            usageStage: "mash",
+          });
+        }
+      }
+      console.log(`Created batch: ${batch3.batchNumber} (planned, ready for shortcut)`);
+    }
   } else {
     console.log("Batches already exist, skipping.");
   }

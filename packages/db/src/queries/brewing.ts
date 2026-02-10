@@ -278,6 +278,41 @@ export function transition(id: string, toStatus: BatchStatus) {
     }
   }
 
+  if (currentStatus === "planned" && toStatus === "fermenting") {
+    // Compound shortcut: planned → fermenting (same-day brew + transfer)
+    // Combines guards from planned→brewing AND brewing→fermenting
+    const recipe = db
+      .select()
+      .from(recipes)
+      .where(eq(recipes.id, batch.recipeId))
+      .get();
+    if (!recipe || recipe.status !== "active") {
+      throw new Error("Recipe must be active before brewing can start");
+    }
+    if (!batch.vesselId) {
+      throw new Error("A vessel must be assigned before brewing can start");
+    }
+    const vessel = db
+      .select()
+      .from(vessels)
+      .where(eq(vessels.id, batch.vesselId))
+      .get();
+    if (!vessel || vessel.status !== "available") {
+      throw new Error("Assigned vessel must be available before brewing can start");
+    }
+    if (batch.actualOg == null) {
+      throw new Error("Actual OG must be recorded before moving to fermentation");
+    }
+    const consumptions = db
+      .select()
+      .from(brewIngredientConsumptions)
+      .where(eq(brewIngredientConsumptions.brewBatchId, id))
+      .all();
+    if (consumptions.length === 0) {
+      throw new Error("At least one ingredient consumption must be recorded before moving to fermentation");
+    }
+  }
+
   if (currentStatus === "brewing" && toStatus === "fermenting") {
     if (batch.actualOg == null) {
       throw new Error("Actual OG must be recorded before moving to fermentation");
@@ -336,6 +371,40 @@ export function transition(id: string, toStatus: BatchStatus) {
         })
         .where(eq(vessels.id, batch.vesselId))
         .run();
+    }
+  }
+
+  if (currentStatus === "planned" && toStatus === "fermenting") {
+    // Compound shortcut side effects: planned→brewing + brewing→fermenting
+    // Set brew_date and vessel to in_use (from planned→brewing)
+    updates.brewDate = new Date().toISOString().split("T")[0];
+
+    if (batch.vesselId) {
+      db.update(vessels)
+        .set({
+          status: "in_use",
+          currentBatchId: id,
+          updatedAt: now,
+        })
+        .where(eq(vessels.id, batch.vesselId))
+        .run();
+    }
+
+    // Record stock movements (from brewing→fermenting)
+    const consumptions = db
+      .select()
+      .from(brewIngredientConsumptions)
+      .where(eq(brewIngredientConsumptions.brewBatchId, id))
+      .all();
+    for (const c of consumptions) {
+      recordMovement({
+        inventoryLotId: c.inventoryLotId,
+        movementType: "consumed",
+        quantity: -c.actualQuantity,
+        referenceType: "brew_batch",
+        referenceId: id,
+        reason: `Consumed in batch ${batch.batchNumber ?? id}`,
+      });
     }
   }
 

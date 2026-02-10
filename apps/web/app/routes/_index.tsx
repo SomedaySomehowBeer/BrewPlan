@@ -5,7 +5,17 @@ import { queries } from "~/lib/db.server";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { StatusBadge } from "~/components/shared/status-badge";
-import { ClipboardList, Package, Beer, Container } from "lucide-react";
+import {
+  ClipboardList,
+  Package,
+  Beer,
+  Container,
+  ShoppingCart,
+  DollarSign,
+  CalendarClock,
+  Boxes,
+  PackageCheck,
+} from "lucide-react";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await requireUser(request);
@@ -32,6 +42,22 @@ export async function loader({ request }: Route.LoaderArgs) {
     .filter((b) => !["completed", "cancelled", "dumped"].includes(b.status))
     .slice(0, 5);
 
+  // New: orders pending delivery and revenue this month
+  const pendingDeliveries = queries.reporting.getOrdersPendingDelivery();
+  const ordersPendingCount = pendingDeliveries.length;
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-31`;
+  const revenueData = queries.reporting.getRevenueByPeriod(
+    monthStart,
+    monthEnd,
+    "month"
+  );
+  const revenueThisMonth = revenueData.length > 0 ? revenueData[0].totalRevenue : 0;
+
+  const upcomingDeliveries = pendingDeliveries.slice(0, 5);
+
   return {
     stats: {
       activeRecipes,
@@ -39,14 +65,18 @@ export async function loader({ request }: Route.LoaderArgs) {
       totalVessels: vessels.length,
       availableVessels,
       lowStockItems,
+      ordersPending: ordersPendingCount,
+      revenueThisMonth,
     },
     recentBatches,
+    upcomingDeliveries,
     userRole: user.role,
   };
 }
 
 export default function Dashboard() {
-  const { stats, recentBatches, userRole } = useLoaderData<typeof loader>();
+  const { stats, recentBatches, upcomingDeliveries, userRole } =
+    useLoaderData<typeof loader>();
 
   const statCards = [
     {
@@ -73,6 +103,18 @@ export default function Dashboard() {
       icon: Package,
       to: "/inventory",
     },
+    {
+      label: "Orders Pending",
+      value: stats.ordersPending,
+      icon: ShoppingCart,
+      to: "/orders",
+    },
+    {
+      label: "Revenue This Month",
+      value: `$${Number(stats.revenueThisMonth).toLocaleString("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+      icon: DollarSign,
+      to: "/orders",
+    },
   ];
 
   return (
@@ -82,7 +124,7 @@ export default function Dashboard() {
         <p className="text-muted-foreground">Brewery overview</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         {statCards.map((stat) => (
           <Link key={stat.label} to={stat.to}>
             <Card className="hover:border-primary/50 transition-colors">
@@ -98,6 +140,28 @@ export default function Dashboard() {
             </Card>
           </Link>
         ))}
+      </div>
+
+      {/* Quick-link buttons */}
+      <div className="flex flex-wrap gap-3">
+        <Button variant="outline" asChild>
+          <Link to="/planning/schedule">
+            <CalendarClock className="mr-2 h-4 w-4" />
+            Brew Schedule
+          </Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/inventory">
+            <Boxes className="mr-2 h-4 w-4" />
+            Materials
+          </Link>
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/planning/packaging">
+            <PackageCheck className="mr-2 h-4 w-4" />
+            Packaging Priority
+          </Link>
+        </Button>
       </div>
 
       <Card>
@@ -122,6 +186,42 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <StatusBadge status={batch.status} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Upcoming Deliveries</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {upcomingDeliveries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No pending deliveries.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {upcomingDeliveries.map((order) => (
+                <Link
+                  key={order.id}
+                  to={`/orders/${order.id}`}
+                  className="flex items-center justify-between rounded-md border border-border p-3 min-h-[44px] hover:bg-accent transition-colors"
+                >
+                  <div>
+                    <span className="font-medium">{order.orderNumber}</span>
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {order.customerName}
+                    </span>
+                    {order.deliveryDate && (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        Due: {order.deliveryDate}
+                      </span>
+                    )}
+                  </div>
+                  <StatusBadge status={order.status} />
                 </Link>
               ))}
             </div>

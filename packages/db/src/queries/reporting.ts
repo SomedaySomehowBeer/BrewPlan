@@ -165,3 +165,116 @@ export function getOrdersForCsvExport() {
     .orderBy(desc(orders.createdAt))
     .all();
 }
+
+// ── Aggregate Queries ───────────────────────────────
+
+export function getTopProducts(limit = 10) {
+  return db
+    .select({
+      recipeId: orderLines.recipeId,
+      recipeName: recipes.name,
+      format: orderLines.format,
+      totalQuantity: sql<number>`sum(${orderLines.quantity})`,
+      totalRevenue: sql<number>`sum(${orderLines.lineTotal})`,
+    })
+    .from(orderLines)
+    .innerJoin(recipes, eq(orderLines.recipeId, recipes.id))
+    .innerJoin(orders, eq(orderLines.orderId, orders.id))
+    .where(
+      inArray(orders.status, [
+        "confirmed",
+        "picking",
+        "dispatched",
+        "delivered",
+        "invoiced",
+        "paid",
+      ])
+    )
+    .groupBy(orderLines.recipeId, orderLines.format)
+    .orderBy(sql`sum(${orderLines.lineTotal}) desc`)
+    .limit(limit)
+    .all();
+}
+
+export function getTopCustomers(limit = 10) {
+  return db
+    .select({
+      customerId: orders.customerId,
+      customerName: customers.name,
+      totalRevenue: sql<number>`sum(${orders.total})`,
+      orderCount: sql<number>`count(*)`,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(
+      inArray(orders.status, [
+        "confirmed",
+        "picking",
+        "dispatched",
+        "delivered",
+        "invoiced",
+        "paid",
+      ])
+    )
+    .groupBy(orders.customerId)
+    .orderBy(sql`sum(${orders.total}) desc`)
+    .limit(limit)
+    .all();
+}
+
+export function getOrdersPendingDelivery() {
+  return db
+    .select({
+      id: orders.id,
+      orderNumber: orders.orderNumber,
+      customerName: customers.name,
+      deliveryDate: orders.deliveryDate,
+      total: orders.total,
+      status: orders.status,
+    })
+    .from(orders)
+    .innerJoin(customers, eq(orders.customerId, customers.id))
+    .where(
+      inArray(orders.status, ["confirmed", "picking", "dispatched"])
+    )
+    .orderBy(orders.deliveryDate)
+    .all();
+}
+
+export function getRevenueByPeriod(
+  startDate: string,
+  endDate: string,
+  groupBy: "day" | "week" | "month" = "month"
+) {
+  const dateExpr =
+    groupBy === "day"
+      ? sql<string>`date(${orders.orderDate})`
+      : groupBy === "week"
+      ? sql<string>`date(${orders.orderDate}, 'weekday 0', '-6 days')`
+      : sql<string>`substr(${orders.orderDate}, 1, 7)`;
+
+  return db
+    .select({
+      period: dateExpr.as("period"),
+      totalRevenue: sql<number>`sum(${orders.total})`,
+      orderCount: sql<number>`count(*)`,
+    })
+    .from(orders)
+    .where(
+      and(
+        inArray(orders.status, [
+          "confirmed",
+          "picking",
+          "dispatched",
+          "delivered",
+          "invoiced",
+          "paid",
+        ]),
+        gte(orders.orderDate, startDate),
+        lte(orders.orderDate, endDate)
+      )
+    )
+    .groupBy(sql`period`)
+    .orderBy(sql`period`)
+    .all();
+}

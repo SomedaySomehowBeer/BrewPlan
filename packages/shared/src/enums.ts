@@ -196,7 +196,7 @@ export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 // Valid batch transitions
 export const BATCH_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
-  [BatchStatus.PLANNED]: [BatchStatus.BREWING, BatchStatus.CANCELLED],
+  [BatchStatus.PLANNED]: [BatchStatus.BREWING, BatchStatus.FERMENTING, BatchStatus.CANCELLED],
   [BatchStatus.BREWING]: [BatchStatus.FERMENTING, BatchStatus.DUMPED],
   [BatchStatus.FERMENTING]: [BatchStatus.CONDITIONING, BatchStatus.DUMPED],
   [BatchStatus.CONDITIONING]: [
