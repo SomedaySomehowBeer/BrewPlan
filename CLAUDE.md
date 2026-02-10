@@ -8,7 +8,7 @@ Brewery management app for Someday Somehow Brewing (gluten-free brewery, Vasse W
 - **Database:** SQLite via better-sqlite3 + Drizzle ORM
 - **Validation:** Zod schemas in `packages/shared/`
 - **Styling:** Tailwind CSS 4 + shadcn/ui, mobile-first (44px touch targets)
-- **Auth:** Cookie sessions, `requireUser()` in every loader/action
+- **Auth:** Cookie sessions, RBAC (admin/brewer/viewer), `requireUser()` in every loader/action
 - **Monorepo:** pnpm workspaces + turborepo
 - **Deploy:** Fly.io Sydney, Litestream → Tigris for SQLite backups
 
@@ -19,13 +19,13 @@ Brewery management app for Someday Somehow Brewing (gluten-free brewery, Vasse W
 - `packages/shared/` — Enums, TypeScript interfaces, Zod schemas. Shared contract.
 - `packages/db/` — Drizzle schema, query functions, migrations, seed.
 - `apps/web/` — Remix app. Routes split by domain module.
-- `apps/web/e2e/` — Playwright E2E tests. 12 spec files, 38 tests.
+- `apps/web/e2e/` — Playwright E2E tests. 16 spec files, 65 tests.
 
 ## Conventions
 
 - TypeScript strict mode everywhere. No `any`.
 - Metric units only (g, kg, ml, L, °C). No imperial.
-- All route loaders call `requireUser(request)` first.
+- All route loaders call `requireUser(request)` first. Mutations use `requireMutationAccess` (admin+brewer) or `requireAdminAccess` (admin only).
 - Zod schemas validate all mutations (actions). Never trust form data directly.
 - Database queries live in `packages/db/src/queries/`, not in route files.
 - Route files contain: loader, action (if mutations), default export (UI component).
